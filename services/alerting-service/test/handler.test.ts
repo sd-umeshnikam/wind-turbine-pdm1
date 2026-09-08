@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const getThresholdConfigMock = vi.fn();
 const putAlertMock = vi.fn();
+const listActiveAlertsMock = vi.fn();
 const publishAlertMock = vi.fn();
 
 vi.mock("../src/dynamoClient", () => ({
   getThresholdConfig: (...args: unknown[]) => getThresholdConfigMock(...args),
   putAlert: (...args: unknown[]) => putAlertMock(...args),
+  listActiveAlerts: (...args: unknown[]) => listActiveAlertsMock(...args),
 }));
 vi.mock("../src/snsClient", () => ({
   publishAlert: (...args: unknown[]) => publishAlertMock(...args),
@@ -17,6 +19,7 @@ import { handler } from "../src/handler";
 beforeEach(() => {
   getThresholdConfigMock.mockReset();
   putAlertMock.mockReset();
+  listActiveAlertsMock.mockReset();
   publishAlertMock.mockReset();
 });
 
@@ -63,5 +66,26 @@ describe("alerting-service handler", () => {
       handler({ detail: { component: "gearbox", faultProbability: 0.9, rulHoursP50: 10 } }),
     ).rejects.toThrow(/turbineId/i);
     expect(getThresholdConfigMock).not.toHaveBeenCalled();
+  });
+
+  it("answers Query.activeAlerts (AppSync-shaped event) via the DynamoDB list path", async () => {
+    const alerts = [
+      { id: "T001#gearbox", turbineId: "T001", component: "gearbox", severity: "high",
+        message: "m", createdAt: "2026-01-01T00:00:00Z", acknowledged: false },
+    ];
+    listActiveAlertsMock.mockResolvedValueOnce(alerts);
+
+    const result = await handler({ field: "activeAlerts", arguments: {} });
+
+    expect(result).toEqual(alerts);
+    expect(listActiveAlertsMock).toHaveBeenCalledTimes(1);
+    expect(getThresholdConfigMock).not.toHaveBeenCalled();
+    expect(putAlertMock).not.toHaveBeenCalled();
+  });
+
+  it("wraps a DynamoDB failure on the activeAlerts read path as an UpstreamError", async () => {
+    listActiveAlertsMock.mockRejectedValueOnce(new Error("throttled"));
+
+    await expect(handler({ field: "activeAlerts" })).rejects.toThrow(/active alerts/i);
   });
 });

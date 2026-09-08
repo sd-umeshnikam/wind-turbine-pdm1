@@ -1,4 +1,5 @@
 import { runQuery } from "./timestreamClient";
+import { queryReadings } from "./postgresClient";
 import {
   AppSyncLambdaResolverEvent,
   TelemetryQueryArgs,
@@ -118,6 +119,19 @@ export async function handler(
   event: AppSyncLambdaResolverEvent<unknown>,
 ): Promise<SensorReading[]> {
   const args = parseArgs(event.arguments);
+
+  // Local hosting (see docs/LINUX_HOSTING_GUIDE.md, ADR-0004) swaps Timestream for
+  // TimescaleDB — Timestream has no free self-hosted equivalent. Unset/anything
+  // else keeps the cloud path unchanged.
+  if (process.env.TELEMETRY_BACKEND === "postgres") {
+    try {
+      return await queryReadings(args.turbineId, args.from, args.to);
+    } catch (err) {
+      console.error("Timescale query failed", { turbineId: args.turbineId, err });
+      throw new UpstreamError("Failed to read telemetry from Timescale.", err);
+    }
+  }
+
   const query = buildQuery(args);
 
   let result;

@@ -7,6 +7,11 @@ frontend dashboard). For deploying to real AWS/Databricks environments, see
 [`manual-setup/RUNBOOK.md`](manual-setup/RUNBOOK.md) (console path) instead — do that only after
 this local setup is working.
 
+**On Linux or macOS?** The same lightweight path works via `./scripts/setup-all.sh` (bash ports of
+every script below, same flags). If you want the *full* stack self-hosted — real Spark/Delta
+pipeline, real model training, real local serving, no AWS account at all — see
+[`LINUX_HOSTING_GUIDE.md`](LINUX_HOSTING_GUIDE.md) instead, this doc's scope is the mock-data path only.
+
 ## 1. Prerequisites
 
 | Tool | Minimum version | Check with | Get it from |

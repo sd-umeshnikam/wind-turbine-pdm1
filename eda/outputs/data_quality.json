@@ -6,7 +6,7 @@
     "n_columns": 86,
     "n_rows_total": 1196747,
     "avg_rows_per_file": 54397.6,
-    "read_time_sec": 2.9,
+    "read_time_sec": 2.7,
     "schema_consistent_across_files": true,
     "schema_mismatched_files": [],
     "missingness_summary": {
@@ -116,7 +116,7 @@
     "n_columns": 257,
     "n_rows_total": 859065,
     "avg_rows_per_file": 57271.0,
-    "read_time_sec": 6.4,
+    "read_time_sec": 5.9,
     "schema_consistent_across_files": true,
     "schema_mismatched_files": [],
     "missingness_summary": {
@@ -219,7 +219,7 @@
     "n_columns": 957,
     "n_rows_total": 3187136,
     "avg_rows_per_file": 54950.6,
-    "read_time_sec": 149.2,
+    "read_time_sec": 148.7,
     "schema_consistent_across_files": true,
     "schema_mismatched_files": [],
     "missingness_summary": {

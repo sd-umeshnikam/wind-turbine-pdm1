@@ -13,11 +13,13 @@ export interface TelemetryQueryArgs {
  * Minimal shape of the event AppSync sends to a direct Lambda data source resolver.
  * We only declare the parts this handler actually reads — the real event carries
  * `identity`, `source`, `request`, and `info` too, but modeling fields we never use
- * would just be speculative surface area.
+ * would just be speculative surface area. `field` matches the key name the
+ * resolver's request template (infra/terraform/.../templates/invoke_request.vtl)
+ * actually sends (`"field": "$context.info.fieldName"`) — not `fieldName`.
  */
 export interface AppSyncLambdaResolverEvent<TArgs> {
   arguments: TArgs;
-  fieldName?: string;
+  field?: string;
 }
 
 export class ValidationError extends Error {

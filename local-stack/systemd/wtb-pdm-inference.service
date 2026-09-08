@@ -1,0 +1,15 @@
+[Unit]
+Description=Wind Turbine PdM - local inference server (Databricks Model Serving substitute)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/wtb-pdm/local-stack/inference
+EnvironmentFile=/opt/wtb-pdm/local-stack/inference/.env
+ExecStart=/opt/wtb-pdm/local-stack/inference/.venv/bin/uvicorn serve:app --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+User=wtb-pdm
+
+[Install]
+WantedBy=multi-user.target
