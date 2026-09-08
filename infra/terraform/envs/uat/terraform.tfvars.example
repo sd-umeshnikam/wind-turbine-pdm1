@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in real, non-secret values for this account.
+# Never commit terraform.tfvars itself (it's already in .gitignore).
+
+env         = "uat"
+aws_region  = "us-east-1"
+name_prefix = "wtb-pdm"
+
+databricks_host        = "https://<workspace-id>.cloud.databricks.com"
+databricks_account_id  = "414351767826"
+databricks_external_id = "<unity-catalog-storage-credential-external-id>"
+
+vpc_id             = "vpc-EXAMPLE00000000"
+private_subnet_ids = ["subnet-EXAMPLE1111111", "subnet-EXAMPLE2222222"]
+
+rds_instance_class                       = "db.t3.small"
+rds_multi_az                             = true
+timestream_magnetic_store_retention_days = 365
+
+alert_notification_email = "pdm-platform-alerts-uat@example.com"

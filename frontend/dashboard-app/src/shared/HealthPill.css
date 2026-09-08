@@ -1,0 +1,10 @@
+.health-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  line-height: 1.6;
+}

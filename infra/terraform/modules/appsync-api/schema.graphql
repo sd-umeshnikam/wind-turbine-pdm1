@@ -1,0 +1,84 @@
+type Turbine {
+  id: ID!
+  farmId: String!
+  name: String
+  model: String
+}
+
+type SensorReading {
+  turbineId: ID!
+  timestamp: AWSDateTime!
+  sensor: String!
+  value: Float!
+  unit: String
+}
+
+type Alert {
+  id: ID!
+  turbineId: ID!
+  component: String!
+  severity: String!
+  message: String!
+  createdAt: AWSDateTime!
+  acknowledged: Boolean!
+}
+
+type ForecastPoint {
+  timestamp: AWSDateTime!
+  value: Float!
+}
+
+type Prediction {
+  turbineId: ID!
+  component: String!
+  faultProbability: Float!
+  rulHoursP10: Float!
+  rulHoursP50: Float!
+  rulHoursP90: Float!
+  forecastSeries: [ForecastPoint!]!
+}
+
+# Published by digital-twin-service; componentHealth is a free-form map
+# (component name -> "green"/"amber"/"red") so AWSJSON is used rather than a
+# closed field set, matching services/shared/types.ts's ComponentType/HealthStatus map.
+type TwinState {
+  turbineId: ID!
+  timestamp: AWSDateTime!
+  pitchAngleDeg: Float!
+  rotorSpeedRpm: Float!
+  componentHealth: AWSJSON!
+}
+
+input TwinStateInput {
+  turbineId: ID!
+  timestamp: AWSDateTime!
+  pitchAngleDeg: Float!
+  rotorSpeedRpm: Float!
+  componentHealth: AWSJSON!
+}
+
+type Query {
+  telemetry(turbineId: ID!, from: AWSDateTime!, to: AWSDateTime!): [SensorReading!]!
+  predictions(turbineId: ID!, component: String): [Prediction!]!
+  activeAlerts: [Alert!]!
+}
+
+# digital-twin-service publishes twin state through this mutation; AppSync fans
+# it out to subscribers via @aws_subscribe below. It is not intended to be
+# called by the React app directly, and is wired to a local ("NONE") data
+# source in main.tf — it never invokes a Lambda, it only echoes its input so
+# the subscription fan-out fires.
+type Mutation {
+  publishTwinUpdate(input: TwinStateInput!): TwinState
+}
+
+type Subscription {
+  onTwinUpdate(turbineId: ID!): TwinState
+    @aws_subscribe(mutations: ["publishTwinUpdate"])
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}

@@ -1,0 +1,95 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-apply.yml"
+
+permissions:
+  id-token: write # required for AWS OIDC
+  contents: read
+
+jobs:
+  # dev auto-applies on every merge to main (trunk-based, per BLUEPRINT.md §7).
+  apply-dev:
+    name: apply (dev)
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/dev
+    env:
+      TF_VAR_databricks_host: ${{ secrets.DATABRICKS_HOST_DEV }}
+      TF_VAR_databricks_external_id: ${{ secrets.DATABRICKS_EXTERNAL_ID_DEV }}
+      TF_VAR_vpc_id: ${{ secrets.VPC_ID_DEV }}
+      TF_VAR_private_subnet_ids: ${{ secrets.PRIVATE_SUBNET_IDS_DEV }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: us-east-1
+      - run: terraform init
+      - run: terraform apply -input=false -auto-approve
+
+  # staging and uat require a GitHub Environment with required reviewers configured
+  # (Settings -> Environments -> staging/uat -> Required reviewers) -- this job
+  # pauses for manual approval before it runs, giving the promotion gate from
+  # BLUEPRINT.md §7 without any extra workflow logic.
+  apply-staging:
+    name: apply (staging)
+    needs: apply-dev
+    runs-on: ubuntu-latest
+    environment: staging
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/staging
+    env:
+      TF_VAR_databricks_host: ${{ secrets.DATABRICKS_HOST_STAGING }}
+      TF_VAR_databricks_external_id: ${{ secrets.DATABRICKS_EXTERNAL_ID_STAGING }}
+      TF_VAR_vpc_id: ${{ secrets.VPC_ID_STAGING }}
+      TF_VAR_private_subnet_ids: ${{ secrets.PRIVATE_SUBNET_IDS_STAGING }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_STAGING }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: us-east-1
+      - run: terraform init
+      - run: terraform apply -input=false -auto-approve
+
+  apply-uat:
+    name: apply (uat)
+    needs: apply-staging
+    runs-on: ubuntu-latest
+    environment: uat
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/uat
+    env:
+      TF_VAR_databricks_host: ${{ secrets.DATABRICKS_HOST_UAT }}
+      TF_VAR_databricks_external_id: ${{ secrets.DATABRICKS_EXTERNAL_ID_UAT }}
+      TF_VAR_vpc_id: ${{ secrets.VPC_ID_UAT }}
+      TF_VAR_private_subnet_ids: ${{ secrets.PRIVATE_SUBNET_IDS_UAT }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_UAT }}
+          aws-region: us-east-1
+      - run: terraform init
+      - run: terraform apply -input=false -auto-approve

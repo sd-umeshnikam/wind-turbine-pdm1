@@ -1,0 +1,278 @@
+resources:
+  jobs:
+    wtb_medallion_pipeline:
+      name: "wtb-medallion-pipeline-${bundle.target}"
+      tags:
+        project: wind-turbine-pdm
+        layer: data-platform
+      job_clusters:
+        - job_cluster_key: medallion_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            autoscale:
+              min_workers: 1
+              max_workers: 4
+            data_security_mode: SINGLE_USER
+
+      # bronze/silver run once per farm; gold runs once, fanning in from all three farms' silver tables
+      tasks:
+        - task_key: bronze_ingest_farm_a
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/bronze/01_ingest_raw.py
+            base_parameters:
+              env: "${bundle.target}"
+              farm: "A"
+
+        - task_key: bronze_ingest_farm_b
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/bronze/01_ingest_raw.py
+            base_parameters:
+              env: "${bundle.target}"
+              farm: "B"
+
+        - task_key: bronze_ingest_farm_c
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/bronze/01_ingest_raw.py
+            base_parameters:
+              env: "${bundle.target}"
+              farm: "C"
+
+        - task_key: silver_clean_farm_a
+          depends_on:
+            - task_key: bronze_ingest_farm_a
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/silver/02_clean_conform.py
+            base_parameters:
+              env: "${bundle.target}"
+              farm: "A"
+
+        - task_key: silver_clean_farm_b
+          depends_on:
+            - task_key: bronze_ingest_farm_b
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/silver/02_clean_conform.py
+            base_parameters:
+              env: "${bundle.target}"
+              farm: "B"
+
+        - task_key: silver_clean_farm_c
+          depends_on:
+            - task_key: bronze_ingest_farm_c
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/silver/02_clean_conform.py
+            base_parameters:
+              env: "${bundle.target}"
+              farm: "C"
+
+        - task_key: gold_features
+          depends_on:
+            - task_key: silver_clean_farm_a
+            - task_key: silver_clean_farm_b
+            - task_key: silver_clean_farm_c
+          job_cluster_key: medallion_cluster
+          notebook_task:
+            notebook_path: ../notebooks/gold/03_features_and_labels.py
+            base_parameters:
+              env: "${bundle.target}"
+
+      schedule:
+        quartz_cron_expression: "0 0 3 * * ?"
+        timezone_id: "UTC"
+        pause_status: "PAUSED" # unpause per-target once bronze S3 prefixes are populated
+
+    wtb_ml_training:
+      name: "wtb-ml-training-${bundle.target}"
+      tags:
+        project: wind-turbine-pdm
+        layer: ml
+      job_clusters:
+        - job_cluster_key: ml_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            autoscale:
+              min_workers: 1
+              max_workers: 4
+            data_security_mode: SINGLE_USER
+
+      # independent of the medallion job; runs weekly, or trigger manually after gold is refreshed
+      tasks:
+        - task_key: train_fault_classifier_gearbox
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "gearbox"
+
+        - task_key: train_fault_classifier_hydraulics
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "hydraulics"
+
+        - task_key: train_fault_classifier_pitch
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "pitch"
+
+        - task_key: train_rul_regressor_gearbox
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "gearbox"
+
+        - task_key: train_rul_regressor_hydraulics
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "hydraulics"
+
+        - task_key: train_rul_regressor_pitch
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "pitch"
+
+        - task_key: train_trend_forecaster_gearbox
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "gearbox"
+
+        - task_key: train_trend_forecaster_hydraulics
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "hydraulics"
+
+        - task_key: train_trend_forecaster_pitch
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "pitch"
+
+        - task_key: train_fault_classifier_generator
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "generator"
+
+        - task_key: train_fault_classifier_transformer
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "transformer"
+
+        - task_key: train_fault_classifier_rotor_brake
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "rotor_brake"
+
+        - task_key: train_rul_regressor_generator
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "generator"
+
+        - task_key: train_rul_regressor_transformer
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "transformer"
+
+        - task_key: train_rul_regressor_rotor_brake
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "rotor_brake"
+
+        - task_key: train_trend_forecaster_generator
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "generator"
+
+        - task_key: train_trend_forecaster_transformer
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "transformer"
+
+        - task_key: train_trend_forecaster_rotor_brake
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "rotor_brake"
+
+        - task_key: train_fault_classifier_vibration
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/04_train_fault_classifier.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "vibration"
+
+        - task_key: train_rul_regressor_vibration
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/05_train_rul_regressor.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "vibration"
+
+        - task_key: train_trend_forecaster_vibration
+          job_cluster_key: ml_cluster
+          notebook_task:
+            notebook_path: ../ml/06_train_trend_forecaster.py
+            base_parameters:
+              env: "${bundle.target}"
+              component: "vibration"
+
+      schedule:
+        quartz_cron_expression: "0 0 5 ? * MON"
+        timezone_id: "UTC"
+        pause_status: "PAUSED" # weekly retrain; also runnable on demand via `databricks bundle run wtb_ml_training`

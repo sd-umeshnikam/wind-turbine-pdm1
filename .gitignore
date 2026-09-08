@@ -1,0 +1,41 @@
+# dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# build output
+dist/
+build/
+*.egg-info/
+
+# terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# env/secrets
+.env
+.env.*
+*.tfvars
+!*.tfvars.example
+
+# editor/OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# large generated EDA artifacts (keep charts referenced by the report only if small; raw intermediates excluded)
+eda/outputs/*.parquet
+eda/outputs/*.tmp
+
+# Word deliverable QA renders (docs/deliverables/scripts/_word_qa.py output) - regenerate, don't commit
+docs/deliverables/*.pdf
+docs/deliverables/*_qa_pages/

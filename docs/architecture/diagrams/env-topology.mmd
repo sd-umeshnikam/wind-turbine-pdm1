@@ -1,0 +1,25 @@
+flowchart TB
+    subgraph GH[GitHub]
+        Main[main branch]
+    end
+
+    subgraph DevAcct["AWS Account: dev"]
+        DevInfra[Terraform: infra/terraform/envs/dev]
+        DevCatalog[Unity Catalog: wtb_dev]
+    end
+    subgraph StagingAcct["AWS Account: staging"]
+        StgInfra[Terraform: infra/terraform/envs/staging]
+        StgCatalog[Unity Catalog: wtb_staging]
+    end
+    subgraph UatAcct["AWS Account: uat"]
+        UatInfra[Terraform: infra/terraform/envs/uat]
+        UatCatalog[Unity Catalog: wtb_uat]
+    end
+
+    Main -->|auto-deploy on merge| DevInfra
+    Main -->|manual approval gate\nGitHub Environment| StgInfra
+    Main -->|manual approval gate\nGitHub Environment| UatInfra
+
+    DevInfra --> DevCatalog
+    StgInfra --> StgCatalog
+    UatInfra --> UatCatalog

@@ -1,0 +1,22 @@
+{
+  "name": "@wtb-pdm/ingestion-trigger",
+  "version": "1.0.0",
+  "private": true,
+  "description": "S3 ObjectCreated-triggered Lambda that kicks off the Databricks bronze->silver->gold workflow run.",
+  "main": "dist/handler.js",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node20 --outfile=dist/handler.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.658.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

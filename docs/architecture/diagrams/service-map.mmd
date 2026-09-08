@@ -1,0 +1,42 @@
+flowchart LR
+    subgraph Clients
+        React[React dashboard]
+    end
+    subgraph API
+        AppSync{{AppSync GraphQL}}
+    end
+    subgraph Services["Independently deployable Lambda services"]
+        T[telemetry-api]
+        P[prediction-api]
+        Al[alerting-service]
+        Tw[digital-twin-service]
+        Ing[ingestion-trigger]
+    end
+    subgraph Stores
+        TS[(Timestream)]
+        DDB[(DynamoDB)]
+        RDS[(RDS Postgres)]
+        MLS[Databricks Model Serving]
+    end
+    subgraph Events
+        EB{{EventBridge}}
+        S3Evt[[S3 ObjectCreated]]
+    end
+
+    React <--> AppSync
+    AppSync <-->|query| T
+    AppSync <-->|query| P
+    AppSync <-->|query| Al
+    AppSync <-->|subscription| Tw
+
+    T --> TS
+    Al --> DDB
+    Al --> RDS
+    P --> MLS
+    Tw --> TS
+    Tw --> DDB
+
+    EB -->|new prediction/Gold data| Al
+    EB -->|schedule/new telemetry| Tw
+    S3Evt --> Ing
+    Ing -.triggers job.-> MLS

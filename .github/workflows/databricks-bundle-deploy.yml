@@ -1,0 +1,86 @@
+name: Databricks Bundle Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data-platform/**"
+      - ".github/workflows/databricks-bundle-deploy.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: data-platform
+
+jobs:
+  deploy-dev:
+    name: Deploy to dev
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+        run: databricks bundle validate -t dev
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_DEV }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+        run: databricks bundle deploy -t dev
+
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    # `environment: staging` requires a manual approval gate, configured in
+    # repo Settings -> Environments -> staging -> required reviewers
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_STAGING }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_STAGING }}
+        run: databricks bundle validate -t staging
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_STAGING }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_STAGING }}
+        run: databricks bundle deploy -t staging
+
+  deploy-uat:
+    name: Deploy to uat
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    # `environment: uat` requires a manual approval gate, configured in
+    # repo Settings -> Environments -> uat -> required reviewers
+    environment: uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_UAT }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
+        run: databricks bundle validate -t uat
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST_UAT }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
+        run: databricks bundle deploy -t uat

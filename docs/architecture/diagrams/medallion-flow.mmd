@@ -1,0 +1,34 @@
+flowchart TD
+    subgraph Bronze
+        A1[farm=A raw CSV]
+        B1[farm=B raw CSV]
+        C1[farm=C raw CSV]
+    end
+    subgraph Silver
+        A2[silver.farm_a]
+        B2[silver.farm_b]
+        C2[silver.farm_c]
+    end
+    subgraph Gold
+        G1[gold.gearbox_features]
+        G2[gold.hydraulics_features]
+        G3[gold.pitch_features]
+        G4[gold.fault_events]
+        G5[gold.rul_labels]
+    end
+
+    A1 -->|Auto Loader| A2
+    B1 -->|Auto Loader| B2
+    C1 -->|Auto Loader| C2
+
+    A2 -->|feature engineering\nkeyword-matched sensors| G1
+    A2 --> G2
+    A2 --> G3
+    B2 --> G1
+    B2 --> G2
+    B2 --> G3
+    C2 --> G1
+    C2 --> G2
+    C2 --> G3
+    A2 & B2 & C2 -->|event_info join| G4
+    G4 --> G5

@@ -1,0 +1,20 @@
+{
+  "name": "@wtb-pdm/prediction-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AppSync Lambda resolver proxying fault probability / RUL / forecast predictions from a Databricks Model Serving endpoint.",
+  "main": "dist/handler.js",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node20 --outfile=dist/handler.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

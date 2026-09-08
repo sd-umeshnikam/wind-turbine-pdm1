@@ -1,0 +1,88 @@
+{
+  "farms": {
+    "A": {
+      "label": "Wind Farm A",
+      "n_turbines": 5,
+      "n_event_files": 22,
+      "n_anomaly_events": 11,
+      "n_normal_events": 11,
+      "anomaly_count_by_category": {
+        "Hydraulics": 6,
+        "Gearbox": 2,
+        "Generator": 2,
+        "Transformer": 1
+      },
+      "lead_time_hours": {
+        "n_events_computable": 0,
+        "n_anomaly_events_total": 11,
+        "avg_hours": null
+      }
+    },
+    "B": {
+      "label": "Wind Farm B",
+      "n_turbines": 9,
+      "n_event_files": 15,
+      "n_anomaly_events": 6,
+      "n_normal_events": 9,
+      "anomaly_count_by_category": {
+        "Other / unclassified": 3,
+        "Bearing": 3
+      },
+      "lead_time_hours": {
+        "n_events_computable": 2,
+        "n_anomaly_events_total": 6,
+        "avg_hours": 1.17
+      }
+    },
+    "C": {
+      "label": "Wind Farm C",
+      "n_turbines": 22,
+      "n_event_files": 58,
+      "n_anomaly_events": 27,
+      "n_normal_events": 31,
+      "anomaly_count_by_category": {
+        "Pitch / blade angle": 8,
+        "Other / unclassified": 5,
+        "PLC / communication / wiring": 4,
+        "Gearbox": 3,
+        "Converter": 2,
+        "Hydraulics": 2,
+        "Rotor brake": 1,
+        "Transformer": 1,
+        "Yaw": 1
+      },
+      "lead_time_hours": {
+        "n_events_computable": 0,
+        "n_anomaly_events_total": 27,
+        "avg_hours": null
+      }
+    }
+  },
+  "fleet_totals": {
+    "total_turbines": 36,
+    "total_event_files": 95,
+    "total_anomaly_events": 44,
+    "total_normal_events": 51,
+    "anomaly_count_by_category": {
+      "Hydraulics": 8,
+      "Other / unclassified": 8,
+      "Pitch / blade angle": 8,
+      "Gearbox": 5,
+      "PLC / communication / wiring": 4,
+      "Bearing": 3,
+      "Transformer": 2,
+      "Generator": 2,
+      "Converter": 2,
+      "Rotor brake": 1,
+      "Yaw": 1
+    }
+  },
+  "headline_kpis": {
+    "total_anomaly_events": 44,
+    "most_common_fault_category_including_other": "Hydraulics",
+    "most_common_named_fault_category": "Hydraulics",
+    "avg_derated_or_idle_to_downtime_lead_time_hours": 1.17,
+    "lead_time_sample_coverage": "2/44 anomaly events"
+  },
+  "data_quality_note": "Turbine counts are distinct asset_id values per farm, not dataset file counts - each physical turbine appears across multiple event-window files."
+}

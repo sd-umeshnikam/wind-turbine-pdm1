@@ -1,0 +1,24 @@
+{
+  "name": "@wtb-pdm/digital-twin-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EventBridge-triggered Lambda that reads latest per-turbine state and publishes it to the AppSync onTwinUpdate subscription channel.",
+  "main": "dist/handler.js",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node20 --outfile=dist/handler.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.658.1",
+    "@aws-sdk/lib-dynamodb": "^3.658.1",
+    "aws4fetch": "^1.0.20"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

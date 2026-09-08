@@ -1,0 +1,178 @@
+name: backend-deploy
+
+# Per-service Lambda deploy: install/test/build/deploy for each of the five
+# independently-deployable services under services/**, matrixed so a change to one
+# service's code never rebuilds or redeploys another (per BLUEPRINT.md section 5 —
+# "no monolith" applies to CI too, not just to runtime).
+#
+# Promotion model: merges to main auto-deploy to dev. staging/uat are separate
+# workflow_dispatch-triggered jobs gated behind GitHub Environment manual-approval
+# rules (configured on the `staging` and `uat` environments themselves, not in this
+# file) — see docs/architecture/BLUEPRINT.md section 7.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment for a manual (staging/uat) deploy"
+        required: true
+        type: choice
+        options: [staging, uat]
+        default: staging
+
+permissions:
+  id-token: write # required for AWS OIDC
+  contents: read
+
+jobs:
+  test-and-build:
+    name: test-and-build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - telemetry-api
+          - prediction-api
+          - alerting-service
+          - digital-twin-service
+          - ingestion-trigger
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build (esbuild bundle)
+        run: npm run build
+
+      - name: Package Lambda zip
+        run: |
+          cd dist
+          zip -r ../function.zip handler.js
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-function
+          path: services/${{ matrix.service }}/function.zip
+          retention-days: 7
+
+  deploy-dev:
+    name: deploy-dev (${{ matrix.service }})
+    needs: test-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev # no manual approval required — dev auto-deploys on merge to main
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - telemetry-api
+          - prediction-api
+          - alerting-service
+          - digital-twin-service
+          - ingestion-trigger
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.service }}-function
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy to dev
+        run: |
+          aws lambda update-function-code \
+            --function-name "wtb-pdm-dev-${{ matrix.service }}" \
+            --zip-file fileb://function.zip
+
+  deploy-staging:
+    name: deploy-staging (${{ matrix.service }})
+    needs: test-and-build
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging # GitHub Environment manual-approval gate configured in repo settings
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - telemetry-api
+          - prediction-api
+          - alerting-service
+          - digital-twin-service
+          - ingestion-trigger
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.service }}-function
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_STAGING }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy to staging
+        run: |
+          aws lambda update-function-code \
+            --function-name "wtb-pdm-staging-${{ matrix.service }}" \
+            --zip-file fileb://function.zip
+
+  deploy-uat:
+    name: deploy-uat (${{ matrix.service }})
+    needs: test-and-build
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'uat'
+    runs-on: ubuntu-latest
+    environment: uat # GitHub Environment manual-approval gate configured in repo settings
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - telemetry-api
+          - prediction-api
+          - alerting-service
+          - digital-twin-service
+          - ingestion-trigger
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.service }}-function
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_UAT }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy to uat
+        run: |
+          aws lambda update-function-code \
+            --function-name "wtb-pdm-uat-${{ matrix.service }}" \
+            --zip-file fileb://function.zip

@@ -1,0 +1,53 @@
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.chart-card h2 {
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
+
+.component-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.component-list h2 {
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+}
+
+.component-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.component-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.component-list li:last-child {
+  border-bottom: none;
+}
+
+.component-name {
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.component-sensor {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  flex: 1;
+}
