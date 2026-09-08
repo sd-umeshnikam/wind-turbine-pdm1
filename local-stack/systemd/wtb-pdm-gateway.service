@@ -1,0 +1,17 @@
+[Unit]
+Description=Wind Turbine PdM - local GraphQL gateway
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+# Adjust to wherever you cloned the repo.
+WorkingDirectory=/opt/wtb-pdm/local-stack/gateway
+EnvironmentFile=/opt/wtb-pdm/local-stack/gateway/.env
+ExecStart=/usr/bin/npx tsx src/server.ts
+Restart=on-failure
+RestartSec=5
+User=wtb-pdm
+
+[Install]
+WantedBy=multi-user.target

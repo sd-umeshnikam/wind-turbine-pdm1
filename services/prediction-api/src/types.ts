@@ -10,7 +10,7 @@ export interface PredictionQueryArgs {
 
 export interface AppSyncLambdaResolverEvent<TArgs> {
   arguments: TArgs;
-  fieldName?: string;
+  field?: string;
 }
 
 /** Shape returned by the Databricks Model Serving REST endpoint. Databricks Model

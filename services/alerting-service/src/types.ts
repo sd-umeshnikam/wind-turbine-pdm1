@@ -21,6 +21,20 @@ export interface EventBridgeLikeEvent {
   detail: unknown;
 }
 
+/**
+ * Shape AppSync sends a direct Lambda data source resolver (matches
+ * infra/terraform/.../templates/invoke_request.vtl - key is `field`, not
+ * `fieldName`). This is how `Query.activeAlerts` invokes this same Lambda
+ * (see infra/terraform/modules/appsync-api/main.tf's `field_to_service` map) -
+ * a second, read-only entrypoint alongside the EventBridge-triggered write path.
+ */
+export interface AppSyncActiveAlertsEvent {
+  field: string;
+  arguments?: Record<string, unknown>;
+}
+
+export type AlertingLambdaEvent = EventBridgeLikeEvent | AppSyncActiveAlertsEvent;
+
 /** Per-component thresholds, stored in DynamoDB so ops can tune sensitivity without
  * a redeploy. `src/dynamoClient.ts` falls back to DEFAULT_THRESHOLDS when no
  * config item exists yet for a component. */

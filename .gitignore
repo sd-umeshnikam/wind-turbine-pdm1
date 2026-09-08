@@ -23,6 +23,7 @@ override.tf.json
 # env/secrets
 .env
 .env.*
+!.env.example
 *.tfvars
 !*.tfvars.example
 
@@ -39,3 +40,10 @@ eda/outputs/*.tmp
 # Word deliverable QA renders (docs/deliverables/scripts/_word_qa.py output) - regenerate, don't commit
 docs/deliverables/*.pdf
 docs/deliverables/*_qa_pages/
+
+# local-stack generated data (Delta tables, turbine id map, MLflow local store/artifacts)
+local-stack/data-lake/
+local-stack/mlruns/
+local-stack/mlflow.db
+local-stack/**/ivy2/
+local-stack/pipeline/.ivy2/

@@ -1,0 +1,51 @@
+version: "3.9"
+
+# Two containers substitute the cloud's managed services (see ADR-0004 for why
+# each was chosen):
+#   localstack  -> S3 (optional pipeline storage), DynamoDB (assets/alerts/config),
+#                  SNS (alert notifications). AWS SDK v3 (already pinned in
+#                  services/*/package.json) auto-honors AWS_ENDPOINT_URL - no code
+#                  changes needed in alerting-service.
+#   timescaledb -> substitutes Amazon Timestream for telemetry-api's local backend
+#                  (TELEMETRY_BACKEND=postgres) - see services/telemetry-api/src/postgresClient.ts.
+services:
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: wtb-pdm-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3,dynamodb,sns
+      DEFAULT_REGION: us-east-1
+      PERSISTENCE: 1
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: wtb-pdm-timescaledb
+    # Host port 5433, not 5432 - avoids colliding with a Postgres already running
+    # on the host, which is common on a real dev machine.
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: wtb_pdm
+      POSTGRES_USER: wtb_pdm
+      POSTGRES_PASSWORD: wtb_pdm_local
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./init/timescale-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wtb_pdm -d wtb_pdm"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  localstack_data:
+  timescale_data:
