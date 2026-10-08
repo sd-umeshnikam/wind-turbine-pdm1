@@ -17,6 +17,21 @@ import { StatTile } from "../../shared/StatTile";
 import { HEALTH_COLORS } from "../../shared/theme";
 import "./ForecastsRulPage.css";
 
+// Calendar-approximate: 30-day months, 365-day years. Shows the two largest non-zero units.
+function formatRul(hours: number): string {
+  if (hours < 24) return `${Math.round(hours)} h`;
+  const totalDays = Math.round(hours / 24);
+  const years = Math.floor(totalDays / 365);
+  const months = Math.floor((totalDays % 365) / 30);
+  const days = (totalDays % 365) % 30;
+  const parts = [
+    years ? `${years} ${years === 1 ? "year" : "years"}` : "",
+    months ? `${months} ${months === 1 ? "month" : "months"}` : "",
+    days ? `${days} ${days === 1 ? "day" : "days"}` : "",
+  ].filter(Boolean);
+  return parts.slice(0, 2).join(" ") || "0 days";
+}
+
 // forecastSeries only carries a single P50-ish trend value per point; the
 // P10-P90 band is reconstructed here by widening proportionally from that
 // trend using the prediction's scalar rulHoursP10/P90 spread, growing with
@@ -58,7 +73,7 @@ export function ForecastsRulPage() {
       <header className="module-header">
         <h1>Forecasts &amp; RUL - {turbineId}</h1>
         <p className="module-subtitle">
-          Remaining-useful-life forecast per component, mock-backed until AppSync is live.
+          Remaining-useful-life forecast per component.
         </p>
       </header>
 
@@ -83,8 +98,8 @@ export function ForecastsRulPage() {
               <section className="tile-row">
                 <StatTile
                   label="RUL (P50)"
-                  value={`${Math.round(active.rulHoursP50)} h`}
-                  sublabel={`P10 ${Math.round(active.rulHoursP10)} h - P90 ${Math.round(active.rulHoursP90)} h`}
+                  value={formatRul(active.rulHoursP50)}
+                  sublabel={`P10 ${formatRul(active.rulHoursP10)} – P90 ${formatRul(active.rulHoursP90)}`}
                 />
                 <StatTile
                   label="Fault probability (30d)"

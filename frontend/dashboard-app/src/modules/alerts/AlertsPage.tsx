@@ -29,7 +29,7 @@ export function AlertsPage() {
     <div className="alerts-page">
       <header className="module-header">
         <h1>Active Alerts</h1>
-        <p className="module-subtitle">Fleet-wide active alerts, mock-backed until AppSync is live.</p>
+        <p className="module-subtitle">Fleet-wide active alerts.</p>
       </header>
 
       {!alerts ? (

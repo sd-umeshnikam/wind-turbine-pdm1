@@ -20,8 +20,6 @@ import json
 import os
 from pathlib import Path
 
-from pyspark.sql import SparkSession
-
 FARMS = ["A", "B", "C"]
 
 # This file lives at local-stack/pipeline/common.py; the platform repo root is two
@@ -69,7 +67,14 @@ def build_spark(app_name: str) -> SparkSession:
     """Delta-enabled local SparkSession, runnable as plain `python <script>.py` (no
     spark-submit needed) - `spark.jars.packages` tells Spark to fetch the Delta Lake
     JAR via Ivy on first run (cached under ~/.ivy2 after that), the same JAR a
-    Databricks cluster provides built-in."""
+    Databricks cluster provides built-in.
+
+    Imports pyspark here, not at module level - inference/serve.py imports this
+    file for gold_path/real_asset_id_for only (reads Delta tables via the native
+    `deltalake` library, not PySpark) and runs in a lean image with no pyspark/JDK
+    at all. A module-level import would make this file unimportable there."""
+    from pyspark.sql import SparkSession
+
     return (
         SparkSession.builder.appName(app_name)
         .master(os.environ.get("SPARK_MASTER", "local[*]"))

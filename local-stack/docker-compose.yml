@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Two containers substitute the cloud's managed services (see ADR-0004 for why
 # each was chosen):
 #   localstack  -> S3 (optional pipeline storage), DynamoDB (assets/alerts/config),
@@ -12,6 +10,7 @@ services:
   localstack:
     image: localstack/localstack:3.8
     container_name: wtb-pdm-localstack
+    restart: unless-stopped
     ports:
       - "4566:4566"
     environment:
@@ -29,6 +28,7 @@ services:
   timescaledb:
     image: timescale/timescaledb:2.17.2-pg16
     container_name: wtb-pdm-timescaledb
+    restart: unless-stopped
     # Host port 5433, not 5432 - avoids colliding with a Postgres already running
     # on the host, which is common on a real dev machine.
     ports:
@@ -45,6 +45,166 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # Tracking server for pipeline/05_train_models.py, containerized so Windows
+  # hosts don't need a host-installed Python/mlflow (see docs/LINUX_HOSTING_GUIDE.md
+  # step 4, which this substitutes for non-Linux dev machines).
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.17.2
+    container_name: wtb-pdm-mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow.db:/mlflow/mlflow.db
+      - ./mlruns:/mlflow/mlruns
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root file:///mlflow/mlruns
+
+  # Runs run_pipeline.sh (bronze -> silver -> gold -> Timescale sync -> model
+  # training) with Java 17 + Python baked into the image, avoiding a host JDK
+  # install on Windows. The repo is bind-mounted, not copied, so it always runs
+  # the current code/dataset. One-shot: `docker compose run --rm pipeline`.
+  pipeline:
+    build:
+      context: ./pipeline
+    container_name: wtb-pdm-pipeline
+    working_dir: /workspace/wind-turbine-pdm-platform/local-stack/pipeline
+    volumes:
+      - ../../:/workspace
+      # mlflow's artifact root is a plain file:// path, not the mlflow-artifacts:/
+      # scheme, so mlflow.*.log_model() writes artifact files directly to this
+      # container's own filesystem at that exact absolute path - without this
+      # mount shared with the mlflow service, every trained model's actual
+      # binary was silently written into this throwaway container and destroyed
+      # by --rm on exit (only the run/registry metadata survived, via mlflow.db).
+      - ./mlruns:/mlflow/mlruns
+    environment:
+      TIMESCALE_URL: postgresql://wtb_pdm:wtb_pdm_local@timescaledb:5432/wtb_pdm
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      # local[*] spawns one task per host logical CPU (nproc reports the host's
+      # count, not a Docker Desktop memory-based limit) - with 20 cores that's 20
+      # concurrent buffered CSV readers, which exceeded Docker Desktop's ~7.6GB
+      # WSL2 VM allocation and failed with ENOMEM. Capped here instead of raising
+      # the VM's memory limit, since that needs a Docker Desktop restart.
+      #
+      # Farm C's raw CSVs are ~17GB - in Spark local mode, all worker threads
+      # share ONE driver-only JVM heap (default 1g), so local[4]'s 4 concurrent
+      # Parquet-writing tasks blew that 1g heap (OutOfMemoryError). Dropping to
+      # local[2] and raising the heap gives each concurrent task more room.
+      # local[1] for training: reading+collecting farm C's gearbox table with 2
+      # concurrent tasks plus a 9g driver heap left too little headroom for
+      # off-heap/Arrow buffers and OS read buffering, causing ENOMEM again - see
+      # PYSPARK_SUBMIT_ARGS below.
+      SPARK_MASTER: local[1]
+      # 05_train_models.py's toPandas() calls collect each component's full gold
+      # table (gearbox alone serializes to ~4GB+) to the driver - repeatedly hit
+      # Spark's spark.driver.maxResultSize safety cap even after raising it once.
+      # This is a one-shot local job, not a shared cluster, so the cap is disabled
+      # (0 = unlimited) rather than guessed at again. toPandas() itself (even via
+      # Arrow) turned out to double-buffer the whole result during the JVM<->Python
+      # socket transfer, so 05_train_models.py now writes to local Parquet and
+      # reads it back with pyarrow instead (no more toPandas() call, so the Arrow
+      # collect config is gone too). That also surfaced a real join bug - see
+      # train_fault_classifier's comment - now fixed. Individual pieces (join,
+      # write, downcast+count) each succeed with room to spare at 6g; only the
+      # full join+downcast+write combination together was still right at the
+      # edge even at 7g - raised to 9g now that Docker Desktop's WSL2 VM itself
+      # was bumped to ~12.8GB (from ~11.7GB - see .wslconfig).
+      PYSPARK_SUBMIT_ARGS: --driver-memory 9g --conf spark.driver.maxResultSize=0 pyspark-shell
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    command: ["./run_pipeline.sh"]
+    profiles:
+      - pipeline
+
+  # Local substitute for Databricks Model Serving (see inference/serve.py's own
+  # docstring / ADR-0002, ADR-0004) - loads the models 05_train_models.py
+  # registered in MLflow and serves them over the same JSON shape
+  # prediction-api already expects. Reads gold Delta tables via the native
+  # `deltalake` library (Rust), not PySpark, so no JDK is needed here - unlike
+  # pipeline/Dockerfile. Long-running, so (unlike pipeline) it's not behind a
+  # profile - it starts automatically with `docker compose up`/up.sh.
+  inference:
+    build:
+      context: ./inference
+    container_name: wtb-pdm-inference
+    restart: unless-stopped
+    working_dir: /workspace/wind-turbine-pdm-platform/local-stack/inference
+    volumes:
+      - ../../:/workspace
+      # same reason as pipeline's mlruns mount - mlflow.pyfunc.load_model() reads
+      # artifact files directly from this exact absolute path.
+      - ./mlruns:/mlflow/mlruns
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    ports:
+      - "8080:8080"
+    depends_on:
+      mlflow:
+        condition: service_started
+
+  # Local substitute for AWS AppSync (see gateway/src/server.ts's own docstring /
+  # ADR-0004) - serves the real schema.graphql, resolvers call the 3 Lambda
+  # handlers under services/*/src in-process. Those handlers (and the schema
+  # file) live outside local-stack/, hence the same whole-repo workspace mount
+  # pattern as pipeline/inference. Each service directory needs its own
+  # node_modules (see Dockerfile/start.sh's comments) - installed at container
+  # start, not image build time, since it's bind-mounted, not copied in.
+  gateway:
+    build:
+      context: ./gateway
+    container_name: wtb-pdm-gateway
+    restart: unless-stopped
+    working_dir: /workspace/wind-turbine-pdm-platform/local-stack/gateway
+    volumes:
+      - ../../:/workspace
+    environment:
+      GATEWAY_PORT: 4000
+      TELEMETRY_BACKEND: postgres
+      TIMESCALE_URL: postgresql://wtb_pdm:wtb_pdm_local@timescaledb:5432/wtb_pdm
+      DATABRICKS_SERVING_URL: http://inference:8080/invocations
+      DATABRICKS_SERVING_TOKEN: local-dev-token
+      ALERTS_TABLE_NAME: wtb-pdm-local-alerts
+      ALERT_CONFIG_TABLE_NAME: wtb-pdm-local-config
+      ALERTS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:wtb-pdm-local-alerts
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+    ports:
+      - "4000:4000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      inference:
+        condition: service_started
+    command: ["./start.sh"]
+
+  # Local substitute for CloudFront+S3 (see docs/LINUX_HOSTING_GUIDE.md step 8) -
+  # nginx serves the built React dashboard as static files and reverse-proxies
+  # /graphql (HTTP + WebSocket) to gateway, so the browser only ever talks to one
+  # origin. Vite bakes VITE_APPSYNC_URL into the JS at build time, so unlike the
+  # other services this one actually builds (see Dockerfile), rather than
+  # bind-mounting+running source live.
+  frontend:
+    build:
+      context: ..
+      dockerfile: local-stack/nginx/Dockerfile
+    container_name: wtb-pdm-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      gateway:
+        condition: service_started
 
 volumes:
   localstack_data:

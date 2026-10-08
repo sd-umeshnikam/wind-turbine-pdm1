@@ -84,9 +84,11 @@ export function AssetDetailPage() {
       </header>
 
       <section className="chart-card">
-        <h2>Sensor trend (last 48h, mock-backed until AppSync is live)</h2>
+        <h2>Sensor trend (last 48h of this turbine's data)</h2>
         {!readings ? (
           <p>Loading telemetry…</p>
+        ) : readings.length === 0 ? (
+          <p>No telemetry data available for this turbine.</p>
         ) : (
           <ResponsiveContainer width="100%" height={340}>
             <LineChart data={series} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>

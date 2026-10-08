@@ -21,8 +21,15 @@ export async function getThresholdConfig(component: ComponentType): Promise<Aler
     throw new Error("ALERT_CONFIG_TABLE_NAME is not configured.");
   }
 
+  // The table's actual partition key attribute is "id" (see
+  // local-stack/init/localstack-init.sh, which creates all three local tables
+  // generically that way - putAlert() below already relies on this via
+  // alert.id). Keying the lookup by "component" instead doesn't match the
+  // table's real key schema, so DynamoDB rejected every call with
+  // ValidationException: One of the required keys was not given a value -
+  // before the fallback-to-defaults path below ever got a chance to run.
   const result = await getDocClient().send(
-    new GetCommand({ TableName: tableName, Key: { component } }),
+    new GetCommand({ TableName: tableName, Key: { id: component } }),
   );
 
   if (!result.Item) {

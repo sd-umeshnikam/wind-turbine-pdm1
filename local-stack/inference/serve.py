@@ -59,6 +59,13 @@ def _latest_version(name: str):
     return versions[0] if versions else None
 
 
+def _first_pred(pred) -> float:
+    """LightGBM regressors' pyfunc wrapper returns a plain numpy array from
+    predict() (no .iloc), unlike the multiclass classifier's wrapper above, which
+    returns something DataFrame/Series-like."""
+    return float(pred.iloc[0]) if hasattr(pred, "iloc") else float(pred[0])
+
+
 def get_model(name: str):
     """Lazily loads and caches a registered model by name; `None` (cached) if it
     was never trained/registered - e.g. a component with too few labeled rows to
@@ -86,8 +93,12 @@ def latest_feature_row(component: str, farm: str, real_asset_id: str) -> Optiona
     path = gold_path(f"{component}_features")
     if not Path(path).joinpath("_delta_log").exists():
         return None
-    df = DeltaTable(path).to_pandas()
-    df = df[(df["farm"] == farm) & (df["asset_id"].astype(str) == str(real_asset_id))]
+    # Loading the whole table (gearbox alone is ~4.7M rows across all 3 farms)
+    # just to find one asset's latest row ran this container out of memory.
+    # "farm" is a partition column (see 03_gold_features.py's partitionBy), so
+    # filtering on it prunes the other farms' files entirely instead of reading
+    # them; the asset_id filter also gets pushed to the Parquet reader.
+    df = DeltaTable(path).to_pandas(filters=[("farm", "=", farm), ("asset_id", "=", int(real_asset_id))])
     if df.empty:
         return None
     return df.sort_values("time_stamp").iloc[-1]
@@ -154,9 +165,9 @@ def predict_one(turbine_id: str, component: str) -> Optional[dict]:
         "turbine_id": turbine_id,
         "component": component,
         "fault_probability": round(fault_probability, 4),
-        "rul_hours_p10": float(p10_model.predict(X).iloc[0]),
-        "rul_hours_p50": float(p50_model.predict(X).iloc[0]),
-        "rul_hours_p90": float(p90_model.predict(X).iloc[0]),
+        "rul_hours_p10": _first_pred(p10_model.predict(X)),
+        "rul_hours_p50": _first_pred(p50_model.predict(X)),
+        "rul_hours_p90": _first_pred(p90_model.predict(X)),
         "forecast_series": build_forecast_series(component, real_asset_id),
     }
 

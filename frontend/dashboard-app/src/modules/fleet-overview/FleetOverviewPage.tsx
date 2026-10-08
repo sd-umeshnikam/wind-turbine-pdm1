@@ -19,7 +19,7 @@ export function FleetOverviewPage() {
         <p className="module-subtitle">
           {summary.fleet_totals.total_turbines} turbines across {Object.keys(summary.farms).length}{" "}
           farms - computed from {summary.fleet_totals.total_event_files} real SCADA event-window
-          files (distinct <code>asset_id</code> values, not file count; see caveat below).
+          {/* files (distinct <code>asset_id</code> values, not file count; see caveat below). */}
         </p>
       </header>
 
@@ -57,7 +57,7 @@ export function FleetOverviewPage() {
         </div>
       </section>
 
-      <section className="data-note">
+      {/* <section className="data-note">
         <strong>Reading these numbers:</strong> Farm B's 6 anomaly events all fall under
         "Other / unclassified" - its real event text describes main/rotor bearing damage and
         generic high-temperature alarms, which sit outside this taxonomy's gearbox/hydraulics/
@@ -65,7 +65,7 @@ export function FleetOverviewPage() {
         angle faults (8), consistent with its 3-axis independent pitch control design. Farm A has
         zero pitch-system anomaly events and matches its documented hydraulic/gearbox/generator/
         transformer fault list exactly.
-      </section>
+      </section> */}
 
       <section className="turbine-picker">
         <h2>Turbines</h2>

@@ -13,14 +13,15 @@ runs them as-is. The only genuinely Windows-specific pieces are the ones with no
 the Java/Python/Node installs themselves, nginx's Windows binary, and running things as background
 services (Windows has no systemd).
 
-**This version assumes Docker is not installed.** The Linux guide's LocalStack + TimescaleDB
-containers (`local-stack/docker-compose.yml`) are the only pieces that genuinely need Docker;
-§3 below replaces them with native, installer-based equivalents — a real PostgreSQL install
-(no container) for the Timescale substitute, and DynamoDB Local's standalone `.jar` (no container)
-for the DynamoDB substitute. Everything else in this guide (the pipeline scripts, inference
-server, gateway, nginx, ngrok) is identical either way. If you install Docker Desktop later,
-you can switch to `local-stack/docker-compose.yml` + `./up.sh` as in the Linux guide instead —
-they're interchangeable, not something you need to migrate off of once running.
+**This version assumes Docker Desktop is already installed** (WSL2 backend, the default on a
+modern install). That means §3 below runs the exact same `local-stack/docker-compose.yml` +
+`./up.sh` the Linux guide uses — genuine LocalStack (S3/DynamoDB/SNS) and TimescaleDB containers,
+not native Windows installs of Postgres/DynamoDB Local. Docker Desktop puts a `docker`/`docker
+compose` CLI on the same Windows `PATH` Git Bash reads, so `up.sh` runs completely unmodified from
+Git Bash. The one thing worth confirming before §3: Docker Desktop itself needs to actually be
+running (its whale icon settled in the system tray) — `docker compose up` against a stopped engine
+just hangs or errors. Everything else in this guide (the pipeline scripts, inference server,
+gateway, nginx, ngrok) is identical to the Linux guide either way.
 
 **Read [ADR-0004](adr/0004-local-hosting-substitutions.md) first** — the one-page table of what's
 a genuine open-source substitute, what's a documented simplification, and what's explicitly out of
@@ -47,8 +48,8 @@ local-stack/pipeline/  (real PySpark + Delta Lake, run_pipeline.sh)
   01 bronze → 02 silver → 03 gold → 04 sync to Timescale → 05 train real models
         │                                    │                      │
         ▼                                    ▼                      ▼
-  Delta tables on disk         PostgreSQL (native service,    MLflow registry (local)
-                                   no Docker — see §3)
+  Delta tables on disk           TimescaleDB (Docker         MLflow registry (local)
+                                   container — see §3)
         │                                    │                      │
         │                                    │                      ▼
         │                                    │          local-stack/inference/serve.py
@@ -70,16 +71,18 @@ local-stack/pipeline/  (real PySpark + Delta Lake, run_pipeline.sh)
 | Tool | Why | Check |
 |---|---|---|
 | **Git for Windows** | Gives you **Git Bash**, the shell every command below runs in — it's what lets the repo's existing `.sh` scripts run unmodified | `bash --version` (from Git Bash) |
-| PostgreSQL 14+ for Windows (postgresql.org, native EDB installer — **not** Docker) | Timescale substitute for telemetry-api (§3) | `psql --version` |
-| Temurin/OpenJDK 17 | PySpark, **and** runs DynamoDB Local's `.jar` (§3) | `java -version` |
+| **Docker Desktop** (WSL2 backend) | Runs LocalStack (S3/DynamoDB/SNS) + TimescaleDB containers (§3) | `docker compose version` |
+| Temurin/OpenJDK 17 | PySpark | `java -version` |
 | Python 3.10–3.12 (python.org, check "Add to PATH") | pipeline, inference server | `python --version` |
 | Node.js 18 LTS+ | gateway, frontend build | `node --version` |
 | nginx for Windows (zip from nginx.org, no installer) | serves the frontend | `nginx -v` |
-| AWS CLI | creates DynamoDB Local's tables (§3) | `aws --version` |
+| AWS CLI | one-time LocalStack init — creates DynamoDB tables + SNS topic (§3) | `aws --version` |
+| `psql` (optional) | inspecting Timescale directly, not required for anything in this guide | `psql --version` |
 | **ngrok** (ngrok.com/download) | public tunnel to your box | `ngrok version` |
 | NSSM (nssm.cc, optional, §10 only) | wraps exes as Windows services (systemd's replacement) | `nssm version` |
 
-No Docker Desktop needed anywhere in this guide — §3 covers the native substitutes.
+Docker Desktop needs to actually be **running** (check the whale icon in the system tray, or
+`docker info` from Git Bash) before §3 — everything else in this table is only used from §4 onward.
 
 Run every command below **in a Git Bash terminal**, not PowerShell or cmd — that's what makes the
 `.sh` scripts work as-is. Docker Desktop, Java, Python, Node, and nginx all put their executables
@@ -117,132 +120,42 @@ set `RAW_DATASET_ROOT` to wherever it actually is. Git Bash's `/d/wtb-pdm` and W
 `D:\wtb-pdm` are the same folder — Windows-native tools like Docker Desktop and `python.exe` will
 happily use whichever path form you give them.)
 
-## 3. Bring up the Timescale + DynamoDB substitutes (no Docker)
+## 3. Bring up LocalStack + TimescaleDB (Docker)
 
-This replaces the Linux guide's `docker compose up` + `./up.sh` with two native installs — a real
-PostgreSQL server and DynamoDB Local's standalone `.jar`. Neither is a container; both are genuine
-processes running directly on Windows.
-
-**3a. PostgreSQL (Timescale substitute)**
-
-Install PostgreSQL for Windows (the EDB installer from postgresql.org), keeping the default port
-5432 and remembering the `postgres` superuser password you set. The installer registers PostgreSQL
-as a Windows service that starts automatically — no `systemctl`/Docker restart-policy equivalent
-needed (see §10).
-
-**The installer does not reliably put `psql`/`createdb` on `PATH`** — a fresh Git Bash window will
-say `createdb: command not found` even right after a successful install. Point at the version you
-installed explicitly (adjust `17` if yours differs — check with
-`ls "/c/Program Files/PostgreSQL/"`):
-```bash
-export PATH="/c/Program Files/PostgreSQL/17/bin:$PATH"
-```
-Add that same line to `~/.bashrc` (or add the folder to your Windows PATH via System Properties →
-Environment Variables) if you don't want to repeat it in every new Git Bash window.
-
-Then, still in Git Bash — each `psql -U postgres`/`createdb -U postgres` call below prompts for
-the `postgres` superuser password interactively (there's no way around that prompt, and no way to
-script around it without hardcoding the password in a file, which isn't worth it for a local dev
-DB — just type it each time, or `export PGPASSWORD='...'` for the session if you'd rather not):
-```bash
-createdb -U postgres wtb_pdm
-psql -U postgres -d wtb_pdm -c "CREATE USER wtb_pdm WITH PASSWORD 'wtb_pdm_local';"
-psql -U postgres -d wtb_pdm -c "GRANT ALL PRIVILEGES ON DATABASE wtb_pdm TO wtb_pdm;"
-psql -U postgres -d wtb_pdm <<'SQL'
-CREATE TABLE IF NOT EXISTS sensor_readings (
-    turbine_id TEXT NOT NULL,
-    time TIMESTAMPTZ NOT NULL,
-    sensor TEXT NOT NULL,
-    value DOUBLE PRECISION NOT NULL,
-    unit TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_sensor_readings_turbine_time
-    ON sensor_readings (turbine_id, time DESC);
-ALTER TABLE sensor_readings OWNER TO wtb_pdm;
-SQL
-```
-**That `ALTER TABLE ... OWNER TO wtb_pdm` line matters — don't skip it.** The table above is created
-as the `postgres` superuser, and the earlier `GRANT ALL PRIVILEGES ON DATABASE` only grants
-database-level privileges (connect/create) — it does **not** cascade to table-level privileges
-(SELECT/INSERT/TRUNCATE) on a table owned by a different user. Without this line,
-`04_sync_timescale.py` fails with `psycopg2.errors.InsufficientPrivilege: permission denied for
-table sensor_readings` the moment it tries to `TRUNCATE` the table, and `telemetry-api` would hit
-the same wall reading it. (The Linux/Docker guide never hits this because there, `wtb_pdm` *is*
-the Postgres superuser inside that container from the start — this only bites the native,
-no-Docker install here where `postgres` and `wtb_pdm` are genuinely separate roles.) If you already
-created the table without this line, fix it after the fact with:
-```bash
-psql -U postgres -d wtb_pdm -c "ALTER TABLE sensor_readings OWNER TO wtb_pdm;"
-```
-
-This is the same `sensor_readings` schema as `local-stack/init/timescale-init.sql`, minus
-`CREATE EXTENSION timescaledb` and `create_hypertable(...)`. That's a deliberate, safe drop: both
-`services/telemetry-api/src/postgresClient.ts` and `local-stack/pipeline/04_sync_timescale.py`
-only ever run plain `SELECT`/`INSERT`/`TRUNCATE` against this table — no Timescale-specific SQL
-(`time_bucket`, etc.) anywhere in the app. The hypertable exists purely as a performance
-optimization at real production scale; a plain Postgres table is functionally identical for this
-single-box local setup.
-
-Note the connection string is now on port **5432** (Postgres' default), not the Linux guide's
-5433 (that was only to dodge a port clash with an existing host Postgres, which doesn't apply
-here since you're installing it fresh):
-```
-postgresql://wtb_pdm:wtb_pdm_local@localhost:5432/wtb_pdm
-```
-
-**3b. DynamoDB Local (LocalStack's DynamoDB piece, minus S3/SNS)**
+Same two containers as the Linux guide, same `docker-compose.yml`, run from Git Bash exactly as
+written — Docker Desktop's CLI sits on the Windows `PATH`, which Git Bash also sees, so nothing
+here is Windows-specific:
 
 ```bash
-mkdir -p /d/wtb-pdm/dynamodb-local && cd /d/wtb-pdm/dynamodb-local
-curl -o dynamodb_local.zip https://s3.us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
-unzip dynamodb_local.zip
-
-# In its own Git Bash window (leave running):
-java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -port 8000
+cd /d/wtb-pdm/wind-turbine-pdm-platform/local-stack
+./up.sh
 ```
-This is AWS's own official standalone DynamoDB emulator — genuinely the same DynamoDB API
-LocalStack's DynamoDB piece wraps, just without the container. Create the same three tables
-`local-stack/init/localstack-init.sh` would have created, against port 8000 instead of 4566:
-```bash
-export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
-for table in wtb-pdm-local-assets wtb-pdm-local-alerts wtb-pdm-local-config; do
-  aws --endpoint-url=http://localhost:8000 dynamodb create-table \
-    --table-name "$table" \
-    --attribute-definitions AttributeName=id,AttributeType=S \
-    --key-schema AttributeName=id,KeyType=HASH \
-    --billing-mode PAY_PER_REQUEST
-done
-```
+This starts both containers and runs the one-time init (DynamoDB tables, SNS topic — see
+`init/localstack-init.sh`; Timescale's hypertable is created automatically on first boot via
+`init/timescale-init.sql`). Re-running `up.sh` is safe.
 
-**What's genuinely missing without Docker: SNS and S3.**
-- **S3** was already optional — the pipeline defaults to writing Delta tables to local disk
-  (`local-stack/pipeline/common.py`'s `DATA_LAKE_ROOT`); the init script only created S3 buckets
-  "if you route pipeline storage through S3 instead," which nothing here does. Skip it, no
-  substitute needed.
-- **SNS** has no standalone no-Docker emulator. `alerting-service`'s write path
-  (`services/alerting-service/src/handler.ts`) calls `putAlert(alert)` (DynamoDB — works fine
-  above) and *then* `publishAlert(alert)` (SNS — will throw, since nothing is listening at
-  whatever `ALERTS_TOPIC_ARN`/endpoint you configure). Because `putAlert` already succeeded by
-  the time `publishAlert` throws, **the alert is already durably written to DynamoDB** — which is
-  the only thing `Query.activeAlerts` (what the dashboard actually reads) depends on. The
-  practical effect is a logged `UpstreamError` in the gateway's scheduler output on every new
-  breach, not a missing alert on the dashboard. Leave `ALERTS_TOPIC_ARN` at its `.env.example`
-  placeholder value and treat that log line as expected noise, same spirit as the other
-  documented simplifications in [ADR-0004](adr/0004-local-hosting-substitutions.md). If you want
-  it silenced instead of just harmless, say so and I can add a tiny local SNS stub — not included
-  by default so this guide doesn't fork the app's code beyond what Docker's absence strictly
-  requires.
+**If this hangs or errors immediately, Docker Desktop probably isn't running yet** — start it from
+the Start menu, wait for the whale icon in the system tray to stop animating, then re-run `./up.sh`.
+A stopped engine typically shows up as `docker compose up` hanging indefinitely, or an
+`error during connect ... dockerDesktopLinuxEngine` message, depending on Docker Desktop version.
 
 Verify:
 ```bash
-psql "postgresql://wtb_pdm:wtb_pdm_local@localhost:5432/wtb_pdm" -c '\dt'
-aws --endpoint-url=http://localhost:8000 dynamodb list-tables
+curl -s http://localhost:4566/_localstack/health | head -c 200
+psql "postgresql://wtb_pdm:wtb_pdm_local@localhost:5433/wtb_pdm" -c '\dt'
 ```
+(That `psql` check is optional — nothing later in this guide requires a native `psql` install;
+it's only useful if you want to poke at Timescale directly. If you do have it installed and it's
+not on `PATH`, point at it explicitly, adjusting the version folder name to match yours: `export
+PATH="/c/Program Files/PostgreSQL/17/bin:$PATH"`.)
+
+Because this brings up the real LocalStack SNS piece alongside DynamoDB, `alerting-service`'s full
+write path — `putAlert(alert)` (DynamoDB) *then* `publishAlert(alert)` (SNS) — works end-to-end
+here, unlike a from-scratch native install with no SNS substitute. `local-stack/gateway/.env.example`
+already ships the matching values (`TIMESCALE_URL` on port 5433, `AWS_ENDPOINT_URL=http://localhost:4566`,
+a real `ALERTS_TOPIC_ARN`), so §7 needs no edits.
 
 ## 4. Python environment + local MLflow server
-
-**Note the `cd` below is absolute, not relative to wherever §3b left you** (`dynamodb-local/` is a
-sibling of the platform repo, not inside it — adjust the path if you didn't clone to `D:\wtb-pdm`):
 
 **Use Python 3.10–3.12, not whatever the newest installed Python is.** `requirements.txt` pins
 `pandas==2.2.3`/`numpy==1.26.4`, which have no prebuilt wheels for very new interpreters (3.13+) —
@@ -307,7 +220,7 @@ source it yourself from wherever you trust and just point `HADOOP_HOME` at it be
 
 ```bash
 export MLFLOW_TRACKING_URI=http://localhost:5000
-export TIMESCALE_URL="postgresql://wtb_pdm:wtb_pdm_local@localhost:5432/wtb_pdm"
+export TIMESCALE_URL="postgresql://wtb_pdm:wtb_pdm_local@localhost:5433/wtb_pdm"
 export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot"   # adjust to your install
 export HADOOP_HOME="C:/hadoop"
 export PATH="/c/hadoop/bin:$PATH"
@@ -351,7 +264,7 @@ traceback) means that step genuinely succeeded — the taskkill noise afterward 
 Verify (note `data-lake/` is a sibling of `pipeline/`, one level up — not inside it):
 ```bash
 ls ../data-lake/gold/                    # gold.*_features, fault_events, rul_labels
-psql "postgresql://wtb_pdm:wtb_pdm_local@localhost:5432/wtb_pdm" -c "SELECT count(*) FROM sensor_readings;"
+psql "postgresql://wtb_pdm:wtb_pdm_local@localhost:5433/wtb_pdm" -c "SELECT count(*) FROM sensor_readings;"
 cat ../data-lake/turbine_id_map.json | head # real (farm, asset_id) -> display id map
 # open http://localhost:5000 - registered models per component should now be listed
 ```
@@ -383,14 +296,9 @@ cd ../gateway
 npm install
 cp .env.example .env
 ```
-Edit `.env` for the no-Docker substitutes from §3 before starting:
-```
-TIMESCALE_URL=postgresql://wtb_pdm:wtb_pdm_local@localhost:5432/wtb_pdm
-AWS_ENDPOINT_URL=http://localhost:8000
-# ALERTS_TOPIC_ARN can stay at its placeholder value — see §3's note on SNS being
-# the one piece with no no-Docker substitute; publishAlert will log-and-throw but
-# the alert itself is already durably written to DynamoDB by then.
-```
+`.env.example`'s defaults already match §3's Docker setup (`TIMESCALE_URL` on port 5433,
+`AWS_ENDPOINT_URL=http://localhost:4566`, a real `ALERTS_TOPIC_ARN`) — no edits needed unless you
+changed a port in `docker-compose.yml`.
 ```bash
 npx dotenv -e .env -- npm start
 ```
@@ -501,14 +409,16 @@ nssm start wtb-pdm-ngrok
 but for anything meant to stay up long-term and unattended, an always-on tunnel to an unauthenticated
 dev box is more exposure than most setups want — prefer adding `--basic-auth` (§9) at minimum.
 
-PostgreSQL needs no extra step here — the EDB installer already registered it as an
-auto-starting Windows service (check via `services.msc`, name starts with `postgresql-x64-`).
-DynamoDB Local does, since it's just a bare `java -jar` process:
+LocalStack and TimescaleDB need no NSSM entry — they're Docker containers, not bare processes.
+After a reboot, bring them back with the same command as any other day:
 ```bash
-nssm install wtb-pdm-dynamodb "C:\Program Files\Eclipse Adoptium\jdk-17.x.x-hotspot\bin\java.exe" "-Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb -port 8000"
-nssm set wtb-pdm-dynamodb AppDirectory "D:\wtb-pdm\dynamodb-local"
-nssm start wtb-pdm-dynamodb
+cd /d/wtb-pdm/wind-turbine-pdm-platform/local-stack
+docker compose start
 ```
+If you'd rather they come up automatically with no manual step at all, enable Docker Desktop's
+Settings → General → "Start Docker Desktop when you sign in", and add `restart: unless-stopped` to
+both services in `docker-compose.yml` — then Docker itself relaunches them whenever the engine
+starts, the same role `RestartPolicy=always` plays in the Linux guide's Compose setup.
 
 ## 11. Troubleshooting
 
@@ -523,11 +433,10 @@ nssm start wtb-pdm-dynamodb
 | ngrok forwards to a blank page / 502 | nginx isn't actually up on port 80 yet | Confirm `curl http://localhost/` works locally *before* starting the tunnel |
 | ngrok URL loads the dashboard but every GraphQL call fails | Frontend was rebuilt with an absolute `VITE_APPSYNC_URL` (e.g. the gateway's `:4000` or the ngrok URL itself) instead of the relative `http://localhost/graphql` | Rebuild with `VITE_APPSYNC_URL=http://localhost/graphql` — nginx's same-origin proxy is what makes the ngrok tunnel work with zero extra config |
 | ngrok session immediately errors `ERR_NGROK_...` about auth | Authtoken not configured, or a free-tier session limit hit | Re-run `ngrok config add-authtoken <token>`; free tier allows one agent session at a time |
-| `createdb: command not found` / `psql: command not found` | PostgreSQL's installer didn't add its `bin` folder to `PATH` | `export PATH="/c/Program Files/PostgreSQL/17/bin:$PATH"` (adjust the version number) — see §3a |
-| `psql: error: connection to server ... failed` | PostgreSQL's Windows service isn't running, or the port/password doesn't match what you set at install | Check `services.msc` for `postgresql-x64-...` and start it; re-run the `createdb`/`CREATE USER` steps in §3a if the user/db were never created |
-| `psycopg2.errors.InsufficientPrivilege: permission denied for table sensor_readings` (in `04_sync_timescale.py`, or from `telemetry-api`) | `sensor_readings` is owned by `postgres`, not `wtb_pdm` — a database-level `GRANT` doesn't cascade to table-level privileges | `psql -U postgres -d wtb_pdm -c "ALTER TABLE sensor_readings OWNER TO wtb_pdm;"` — see §3a |
-| `aws dynamodb create-table` hangs or refuses the connection on port 8000 | The `java -jar DynamoDBLocal.jar` window was closed, or Java isn't on PATH | Reopen a Git Bash window in `dynamodb-local/` and re-run the `java -jar` command from §3b; confirm with `java -version` |
-| Gateway/scheduler logs `Failed to write or publish the alert` repeatedly | Expected — see §3's note on SNS having no no-Docker substitute | Harmless: the alert was already written to DynamoDB before this error fires, so `activeAlerts`/the dashboard is unaffected. Only matters if you want clean logs, not for functionality |
+| `docker compose up` hangs, or errors `error during connect ... dockerDesktopLinuxEngine` | Docker Desktop isn't running | Start Docker Desktop from the Start menu, wait for the whale icon in the system tray to settle, then re-run `./up.sh` |
+| `docker compose up` fails to bind port 5433 or 4566 | Something else already listening | Change the host-side port in `local-stack/docker-compose.yml` and update every `TIMESCALE_URL`/`AWS_ENDPOINT_URL` reference (§5, §7) to match |
+| `bash: docker: command not found` in Git Bash | Docker Desktop's CLI isn't on `PATH` yet (usually right after a fresh install, before the first reboot) | Reboot once after installing Docker Desktop, or add `C:\Program Files\Docker\Docker\resources\bin` to `PATH` manually |
+| `psql: command not found` (only if you're using it for §3's optional verify step) | No native PostgreSQL client installed, or it's not on `PATH` | Either skip it — nothing else in this guide needs it — or install the PostgreSQL client tools and `export PATH="/c/Program Files/PostgreSQL/17/bin:$PATH"` (adjust the version number) |
 | `01_bronze_ingest.py`/`02_silver_clean.py` appears to hang right after Spark starts, near-zero CPU, for minutes | A hidden Windows Defender Firewall prompt (often behind other windows or just flashing in the taskbar) is waiting for you to allow `java.exe` network access for Spark's local driver | Find and click "Allow access" on the firewall dialog; the JVM resumes immediately once answered |
 | `java.lang.OutOfMemoryError: Java heap space` while writing a bronze/silver/gold step, usually on a bigger farm (B/C) after a smaller one (A) succeeded | Spark's local-mode driver defaults to a 1GB heap, unset anywhere in `common.py` | `export PYSPARK_SUBMIT_ARGS="--driver-memory 2g pyspark-shell"` and `export SPARK_MASTER="local[2]"` before re-running that farm's step (bump to `3g`+ if it still OOMs and you have the free RAM — check with `Get-CimInstance Win32_OperatingSystem` in PowerShell first); delete that farm's partial output directory first if it has no `_delta_log`, since a crashed write leaves orphaned parquet files behind |
 
@@ -550,13 +459,13 @@ hardcoded string, so a same-structure move just works. Two things do need care, 
 
 **Stop anything holding an open file handle under the folder first**, or the copy can fail or
 silently skip locked files:
-- PostgreSQL needs no action — its data directory lives under its own install path (e.g.
-  `C:\Program Files\PostgreSQL\17\`), never under your cloned repo, so it's unaffected either way.
-- DynamoDB Local (§3b) and the MLflow server (§4) both need stopping — find them by command line
-  first, since multiple `java.exe`/`python.exe`/`mlflow.exe` processes can be running at once and
-  killing the wrong one is easy to do by PID alone:
+- LocalStack and TimescaleDB need no action — they're Docker containers, and their data lives in
+  Docker-managed volumes, never under your cloned repo, so they're unaffected either way.
+- The MLflow server (§4) does need stopping — find it by command line first, since multiple
+  `python.exe`/`mlflow.exe` processes can be running at once and killing the wrong one is easy to
+  do by PID alone:
   ```powershell
-  Get-CimInstance Win32_Process -Filter "Name = 'java.exe' OR Name = 'mlflow.exe'" |
+  Get-CimInstance Win32_Process -Filter "Name = 'mlflow.exe' OR Name = 'python.exe'" |
     Select-Object ProcessId, CommandLine
   Stop-Process -Id <the matching PID(s)> -Force
   ```
@@ -565,7 +474,6 @@ silently skip locked files:
 for tens of thousands of files across drives and reports a clean success/failure count:
 ```powershell
 robocopy "D:\wtb-pdm\wind-turbine-pdm-platform" "E:\wtb-pdm\wind-turbine-pdm-platform" /E /MOVE /MT:8 /R:2 /W:2
-robocopy "D:\wtb-pdm\dynamodb-local" "E:\wtb-pdm\dynamodb-local" /E /MOVE /MT:8 /R:2 /W:2
 robocopy "D:\wtb-pdm\wind-turbine-scada-data-for-early-fault-detection" "E:\wtb-pdm\wind-turbine-scada-data-for-early-fault-detection" /E /MOVE /MT:8 /R:2 /W:2
 ```
 (Substitute whichever source/destination drives are actually yours — `D:`/`E:` here are just this
