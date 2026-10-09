@@ -184,7 +184,7 @@ function mockPredictions(turbineId: string, component?: string): Prediction[] {
       rulHoursP10: Math.max(0, d.p50 - d.spread),
       rulHoursP50: d.p50,
       rulHoursP90: d.p50 + d.spread,
-      forecastSeries: mockForecastSeries(d.p50 / 24, d.spread / 24 / 4),
+      forecastSeries: mockForecastSeries(d.p50, d.spread / 4),
     }));
 }
 

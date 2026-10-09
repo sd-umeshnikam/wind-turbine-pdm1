@@ -18,7 +18,7 @@ export function FleetOverviewPage() {
         <h1>Fleet Overview</h1>
         <p className="module-subtitle">
           {summary.fleet_totals.total_turbines} turbines across {Object.keys(summary.farms).length}{" "}
-          farms - computed from {summary.fleet_totals.total_event_files} real SCADA event-window
+          farms - computed from {summary.fleet_totals.total_event_files} SCADA event-window
           {/* files (distinct <code>asset_id</code> values, not file count; see caveat below). */}
         </p>
       </header>

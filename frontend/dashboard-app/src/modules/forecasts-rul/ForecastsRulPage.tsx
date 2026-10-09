@@ -36,7 +36,16 @@ function formatRul(hours: number): string {
 // P10-P90 band is reconstructed here by widening proportionally from that
 // trend using the prediction's scalar rulHoursP10/P90 spread, growing with
 // forecast horizon (near-term is more certain than the 14-day-out tail).
-function buildBandedSeries(prediction: Prediction) {
+// All series values are hours; the chart shows them in one unit chosen to suit the largest value.
+function chartUnit(maxHours: number): { name: "days" | "months" | "years"; hours: number } {
+  if (maxHours < 90 * 24) return { name: "days", hours: 24 };
+  if (maxHours < 730 * 24) return { name: "months", hours: 30 * 24 };
+  return { name: "years", hours: 365 * 24 };
+}
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+function buildBandedSeries(prediction: Prediction, unitHours: number) {
   const n = prediction.forecastSeries.length;
   const p10Spread = prediction.rulHoursP50 - prediction.rulHoursP10;
   const p90Spread = prediction.rulHoursP90 - prediction.rulHoursP50;
@@ -46,8 +55,8 @@ function buildBandedSeries(prediction: Prediction) {
     const high = point.value + p90Spread * horizonFactor * 0.4;
     return {
       timestamp: point.timestamp,
-      p50: point.value,
-      band: [Math.round(low * 10) / 10, Math.round(high * 10) / 10] as [number, number],
+      p50: round1(point.value / unitHours),
+      band: [round1(low / unitHours), round1(high / unitHours)] as [number, number],
     };
   });
 }
@@ -66,7 +75,11 @@ export function ForecastsRulPage() {
   }, [turbineId]);
 
   const active = predictions?.find((p) => p.component === component) ?? null;
-  const series = useMemo(() => (active ? buildBandedSeries(active) : []), [active]);
+  const unit = useMemo(
+    () => chartUnit(active ? Math.max(active.rulHoursP90, ...active.forecastSeries.map((p: { value: number }) => p.value)) : 0),
+    [active],
+  );
+  const series = useMemo(() => (active ? buildBandedSeries(active, unit.hours) : []), [active, unit]);
 
   return (
     <div className="forecasts-rul">
@@ -121,10 +134,15 @@ export function ForecastsRulPage() {
                     />
                     <YAxis
                       tick={{ fontSize: 12 }}
-                      label={{ value: "RUL (hours)", angle: -90, position: "insideLeft", fontSize: 12 }}
+                      label={{ value: `RUL (${unit.name})`, angle: -90, position: "insideLeft", fontSize: 12 }}
                     />
                     <Tooltip
                       labelFormatter={(v: string) => new Date(v).toLocaleDateString()}
+                      formatter={(value: number | [number, number]) =>
+                        Array.isArray(value)
+                          ? `${formatRul(value[0] * unit.hours)} – ${formatRul(value[1] * unit.hours)}`
+                          : formatRul(value * unit.hours)
+                      }
                       contentStyle={{ fontSize: 12 }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />

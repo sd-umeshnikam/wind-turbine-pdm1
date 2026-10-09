@@ -1,81 +1,288 @@
+.twin-links {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+
+.twin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .twin-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .twin-viewport {
   position: relative;
-  height: 520px;
+  height: 560px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
 
-.twin-viewport canvas {
-  display: block;
-  /* Without this, mobile browsers intercept the two-finger pinch gesture as
-     a native page-zoom/scroll before it reaches OrbitControls, so pinch
-     in/out silently does nothing on touch devices. */
-  touch-action: none;
-}
-
-.twin-overlay {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
-  min-width: 200px;
-  font-size: 0.85rem;
-  color: #1a1a1a;
-}
-
-:root[data-theme="dark"] .twin-overlay {
-  background: rgba(30, 32, 36, 0.92);
-  color: #eee;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .twin-overlay {
-    background: rgba(30, 32, 36, 0.92);
-    color: #eee;
+@media (max-width: 900px) {
+  .twin-viewport {
+    height: 420px;
   }
 }
 
-.twin-overlay h2 {
+.twin-viewport canvas {
+  display: block;
+  /* Lets two-finger pinch reach OrbitControls instead of the browser's page zoom. */
+  touch-action: none;
+}
+
+.twin-schematic {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 48px 0 36px;
+  box-sizing: border-box;
+}
+
+.twin-schematic-rotor {
+  transform-box: view-box;
+  transform-origin: 238px 112px;
+  animation: twin-spin linear infinite;
+}
+
+@keyframes twin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.twin-schematic-part {
+  cursor: pointer;
+}
+
+.twin-schematic-part:hover,
+.twin-schematic-part.selected {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.twin-schematic-part.fault {
+  animation: twin-pulse 1s ease-in-out infinite;
+}
+
+.twin-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.twin-toolbar button {
+  font: inherit;
   font-size: 0.85rem;
-  margin: 0 0 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
 }
 
-.twin-overlay h3 {
-  font-size: 0.8rem;
-  margin: 10px 0 6px;
+.twin-toolbar button:hover {
+  border-color: var(--accent);
 }
 
-.twin-overlay dl {
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 2px 10px;
+.twin-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
   margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  pointer-events: none;
 }
 
-.twin-overlay dt {
+.twin-legend {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
   color: var(--text-muted);
 }
 
-.twin-overlay dd {
-  margin: 0;
+.twin-legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.twin-legend .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.twin-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(20, 22, 26, 0.85);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.twin-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 0.9rem;
+}
+
+.twin-panel h2 {
+  font-size: 0.9rem;
+  margin: 16px 0 6px;
+}
+
+.twin-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
 }
 
-.health-list {
+.twin-status .updated {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.twin-status .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.twin-status .dot.live {
+  background: #2e8540;
+  animation: twin-pulse 1.6s ease-in-out infinite;
+}
+
+.twin-status .dot.paused {
+  background: #d98a12;
+}
+
+@keyframes twin-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.twin-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  font-size: 0.85rem;
+}
+
+.twin-readings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.twin-readings > div {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.twin-readings .label,
+.twin-readings .help {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.twin-readings .value {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.twin-parts {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.health-list li {
+.twin-parts button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 3px 0;
+  width: 100%;
   gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.twin-parts button:hover {
+  background: var(--surface-muted);
+}
+
+.twin-parts button.active {
+  border-color: var(--accent);
+  background: var(--surface-muted);
+}
+
+.twin-detail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.twin-detail h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.twin-detail p {
+  margin: 0 0 8px;
+}
+
+.twin-detail .where {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
