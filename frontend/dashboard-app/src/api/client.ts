@@ -260,20 +260,32 @@ export async function acknowledgeAlert(alertId: string): Promise<{ id: string }>
 
 // --- Digital twin subscription -------------------------------------------------------------
 
-function randomHealth(prevHealth: ComponentHealth): ComponentHealth {
+// Per-update (every 1.2s) chances. Wear only moves forward; a Fault holds until a simulated repair.
+const CHANCE_HEALTHY_TO_WATCH = 0.01;
+const CHANCE_WATCH_TO_FAULT = 0.015;
+const CHANCE_WATCH_SETTLES = 0.005;
+const TWIN_UPDATE_MS = 1200;
+const REPAIR_AFTER_TICKS = (2 * 60 * 60 * 1000) / TWIN_UPDATE_MS; // 2 hours
+
+function advanceHealth(prev: ComponentHealth, faultSince: Record<string, number>, tick: number): ComponentHealth {
   const health: ComponentHealth = {};
   for (const component of COMPONENTS) {
-    const prev = prevHealth[component] ?? "green";
-    // Mostly stable, small chance of drifting one step so the demo panel visibly varies.
+    const status = prev[component] ?? "green";
     const roll = Math.random();
-    if (roll < 0.85) {
-      health[component] = prev;
-    } else if (prev === "green") {
-      health[component] = "amber";
-    } else if (prev === "amber") {
-      health[component] = Math.random() < 0.5 ? "green" : "red";
+    if (status === "green") {
+      health[component] = roll < CHANCE_HEALTHY_TO_WATCH ? "amber" : "green";
+    } else if (status === "amber") {
+      if (roll < CHANCE_WATCH_TO_FAULT) {
+        health[component] = "red";
+        faultSince[component] = tick;
+      } else if (roll < CHANCE_WATCH_TO_FAULT + CHANCE_WATCH_SETTLES) {
+        health[component] = "green";
+      } else {
+        health[component] = "amber";
+      }
     } else {
-      health[component] = "amber";
+      const repaired = tick - (faultSince[component] ?? tick) >= REPAIR_AFTER_TICKS;
+      health[component] = repaired ? "green" : "red";
     }
   }
   return health;
@@ -286,10 +298,11 @@ export function subscribeToTwinUpdates(
   let health: ComponentHealth = Object.fromEntries(
     COMPONENTS.map((c) => [c, "green"]),
   ) as ComponentHealth;
+  const faultSince: Record<string, number> = {};
   let tick = 0;
   const intervalId = setInterval(() => {
     tick += 1;
-    health = randomHealth(health);
+    health = advanceHealth(health, faultSince, tick);
     const rotorSpeedRpm = 12 + Math.sin(tick / 5) * 5 + Math.random() * 0.6;
     const pitchAngleDeg = 10 + Math.sin(tick / 7) * 15;
     onUpdate({
@@ -299,7 +312,7 @@ export function subscribeToTwinUpdates(
       rotorSpeedRpm: Math.round(rotorSpeedRpm * 10) / 10,
       componentHealth: health,
     });
-  }, 1200);
+  }, TWIN_UPDATE_MS);
   return () => clearInterval(intervalId);
 }
 
