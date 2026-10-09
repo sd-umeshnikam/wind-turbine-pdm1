@@ -13,13 +13,22 @@ import "./DigitalTwinPage.css";
 
 const LEGEND: HealthStatus[] = ["green", "amber", "red"];
 
+let webGLSupported: boolean | null = null;
+
+// Probed once per page load; the probe context is released so it doesn't count against
+// the browser's limit on live WebGL contexts (Chrome drops the oldest past ~16).
 function browserSupportsWebGL(): boolean {
-  try {
-    const canvas = document.createElement("canvas");
-    return !!(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
-  } catch {
-    return false;
+  if (webGLSupported === null) {
+    try {
+      const canvas = document.createElement("canvas");
+      const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+      webGLSupported = !!gl;
+      gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    } catch {
+      webGLSupported = false;
+    }
   }
+  return webGLSupported;
 }
 
 // getContext can succeed while three.js still fails to start the renderer, so this catches that case too.
