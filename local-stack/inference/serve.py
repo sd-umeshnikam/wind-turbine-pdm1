@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -36,6 +37,7 @@ ENV_LABEL = "local"
 COMPONENTS = ["gearbox", "hydraulics", "pitch", "generator", "transformer", "rotor_brake", "vibration"]
 METADATA_COLS = {"farm", "asset_id", "time_stamp", "status_type_id", "event_id", "event_label", "category"}
 FORECAST_HORIZON_DAYS = 14
+FARMS = ("A", "B", "C")
 
 mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000"))
 client = MlflowClient()
@@ -43,6 +45,11 @@ app = FastAPI(title="wtb-pdm local inference")
 
 _model_cache: dict[str, Optional[object]] = {}
 _run_id_cache: dict[str, Optional[str]] = {}
+_trend_model_cache: dict[tuple[str, str], Optional[object]] = {}
+# (component, farm) -> (Delta table version it was read at, latest row per asset_id)
+_latest_rows_cache: dict[tuple[str, str], tuple[int, pd.DataFrame]] = {}
+# One table scan at a time: parallel request threads each scanning a farm is what ran the container out of memory.
+_scan_lock = threading.Lock()
 
 
 class DataframeRecord(BaseModel):
@@ -89,19 +96,58 @@ def healthy_class_index(classifier_name: str) -> int:
     return int(run.data.params.get("healthy_class_index", 0))
 
 
-def latest_feature_row(component: str, farm: str, real_asset_id: str) -> Optional[pd.Series]:
+def _scan_latest_rows(table: DeltaTable, farm: str) -> pd.DataFrame:
+    # "farm" is a partition column, so this only touches that farm's files. Reading just
+    # (asset_id, time_stamp) first is cheap; full-width rows are then fetched only at each
+    # asset's latest timestamp instead of materializing every asset's whole history.
+    keys = table.to_pandas(columns=["asset_id", "time_stamp"], filters=[("farm", "=", farm)])
+    if keys.empty:
+        return pd.DataFrame()
+    latest = keys.groupby("asset_id")["time_stamp"].max()
+    candidates = table.to_pandas(filters=[("farm", "=", farm), ("time_stamp", "in", sorted(set(latest.tolist())))])
+    rows = candidates.merge(latest.rename("time_stamp").reset_index(), on=["asset_id", "time_stamp"])
+    # Some assets have duplicate rows at their latest timestamp.
+    return rows.drop_duplicates(subset="asset_id", keep="last").set_index("asset_id")
+
+
+def latest_rows(component: str, farm: str) -> Optional[pd.DataFrame]:
     path = gold_path(f"{component}_features")
     if not Path(path).joinpath("_delta_log").exists():
         return None
-    # Loading the whole table (gearbox alone is ~4.7M rows across all 3 farms)
-    # just to find one asset's latest row ran this container out of memory.
-    # "farm" is a partition column (see 03_gold_features.py's partitionBy), so
-    # filtering on it prunes the other farms' files entirely instead of reading
-    # them; the asset_id filter also gets pushed to the Parquet reader.
-    df = DeltaTable(path).to_pandas(filters=[("farm", "=", farm), ("asset_id", "=", int(real_asset_id))])
-    if df.empty:
+    key = (component, farm)
+    version = DeltaTable(path).version()
+    cached = _latest_rows_cache.get(key)
+    if cached and cached[0] == version:
+        return cached[1]
+    with _scan_lock:
+        cached = _latest_rows_cache.get(key)
+        if cached and cached[0] == version:
+            return cached[1]
+        rows = _scan_latest_rows(DeltaTable(path), farm)
+        _latest_rows_cache[key] = (version, rows)
+        return rows
+
+
+def latest_feature_row(component: str, farm: str, real_asset_id: str) -> Optional[pd.Series]:
+    rows = latest_rows(component, farm)
+    asset_id = int(real_asset_id)
+    if rows is None or asset_id not in rows.index:
         return None
-    return df.sort_values("time_stamp").iloc[-1]
+    return rows.loc[asset_id]
+
+
+def _warm_latest_rows_cache() -> None:
+    for component in COMPONENTS:
+        for farm in FARMS:
+            try:
+                latest_rows(component, farm)
+            except Exception as exc:  # warming is best-effort; a request will retry the scan
+                print(f"cache warm failed for {component}/{farm}: {exc}", flush=True)
+
+
+@app.on_event("startup")
+def start_cache_warmup() -> None:
+    threading.Thread(target=_warm_latest_rows_cache, daemon=True).start()
 
 
 def feature_frame(row: pd.Series) -> pd.DataFrame:
@@ -110,6 +156,13 @@ def feature_frame(row: pd.Series) -> pd.DataFrame:
 
 
 def find_trend_model_for_asset(component: str, real_asset_id: str):
+    key = (component, str(real_asset_id))
+    if key not in _trend_model_cache:
+        _trend_model_cache[key] = _load_trend_model(component, real_asset_id)
+    return _trend_model_cache[key]
+
+
+def _load_trend_model(component: str, real_asset_id: str):
     name = f"{component}_trend_forecaster_{ENV_LABEL}"
     try:
         versions = client.search_model_versions(f"name='{name}'")
