@@ -12,10 +12,12 @@
         "Generator": 2,
         "Transformer": 1
       },
-      "lead_time_hours": {
-        "n_events_computable": 0,
+      "fault_to_downtime_hours": {
+        "n_events_computable": 2,
         "n_anomaly_events_total": 11,
-        "avg_hours": null
+        "median_hours": 0.0,
+        "p25_hours": 0.0,
+        "p75_hours": 0.0
       }
     },
     "B": {
@@ -28,10 +30,12 @@
         "Other / unclassified": 3,
         "Bearing": 3
       },
-      "lead_time_hours": {
-        "n_events_computable": 2,
+      "fault_to_downtime_hours": {
+        "n_events_computable": 4,
         "n_anomaly_events_total": 6,
-        "avg_hours": 1.17
+        "median_hours": 357.1,
+        "p25_hours": 188.4,
+        "p75_hours": 538.1
       }
     },
     "C": {
@@ -45,16 +49,18 @@
         "Other / unclassified": 5,
         "PLC / communication / wiring": 4,
         "Gearbox": 3,
-        "Converter": 2,
         "Hydraulics": 2,
+        "Converter": 2,
         "Rotor brake": 1,
         "Transformer": 1,
         "Yaw": 1
       },
-      "lead_time_hours": {
-        "n_events_computable": 0,
+      "fault_to_downtime_hours": {
+        "n_events_computable": 27,
         "n_anomaly_events_total": 27,
-        "avg_hours": null
+        "median_hours": 28.2,
+        "p25_hours": 13.2,
+        "p75_hours": 68.6
       }
     }
   },
@@ -65,8 +71,8 @@
     "total_normal_events": 51,
     "anomaly_count_by_category": {
       "Hydraulics": 8,
-      "Other / unclassified": 8,
       "Pitch / blade angle": 8,
+      "Other / unclassified": 8,
       "Gearbox": 5,
       "PLC / communication / wiring": 4,
       "Bearing": 3,
@@ -81,8 +87,12 @@
     "total_anomaly_events": 44,
     "most_common_fault_category_including_other": "Hydraulics",
     "most_common_named_fault_category": "Hydraulics",
-    "avg_derated_or_idle_to_downtime_lead_time_hours": 1.17,
-    "lead_time_sample_coverage": "2/44 anomaly events"
+    "fault_to_downtime_hours": {
+      "median_hours": 29.7,
+      "p25_hours": 13.2,
+      "p75_hours": 87.8
+    },
+    "fault_to_downtime_coverage": "33/44 anomaly events"
   },
   "data_quality_note": "Turbine counts are distinct asset_id values per farm, not dataset file counts - each physical turbine appears across multiple event-window files."
 }

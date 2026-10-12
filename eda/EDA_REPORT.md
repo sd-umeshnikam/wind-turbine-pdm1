@@ -60,10 +60,9 @@ entities and both need their own key.
 **Finding: status codes are not used consistently across farms.** Farm A and Farm C never emit
 `status_type_id` 1 (derated) or 2 (idling-normal) at all - their operational states are only
 0/3/4/5. Only Farm B records a derated state, and even there it never records idling(2). This
-directly limited the "lead time from derated/idle onset to downtime" KPI (see Section 5 and
-`fleet_summary.json`): it was only computable for 2 of 44 anomaly events fleet-wide (both in
-Farm B, average 1.2 hours) - too small a sample to generalize, so the platform should not treat
-it as a reliable global number without more instrumentation-consistent data.
+ruled out measuring warning time from derated/idle onset (computable for only 2 of 44 events, both
+Farm B). The platform measures it from each event's logged fault start to the first downtime
+instead, which covers 33 of 44 events - see Section 5 and `fleet_summary.json`.
 
 **`train_test` split**: all three farms reserve a small "prediction" slice per event file (A:
 4.23%, B: 8.40%, C: 4.97% of rows) - this is the dataset's own designated lead-up-to-and-through
@@ -318,11 +317,14 @@ multi-week advance-warning precursor the way the hydraulics and transformer exam
   timing/duration.
 - **File count != turbine count** (Section 1) - the platform's data model needs a turbine
   entity distinct from the event-window file entity.
-- **Lead-time KPI has very low coverage.** Only 2 of 44 anomaly events fleet-wide (both Farm B)
-  had a derated/idling status episode immediately preceding a downtime status in their file;
-  Farm A and Farm C never emit `status_type_id` 1 or 2 at all. The 1.17h average in
-  `outputs/fleet_summary.json` is reported for completeness but should **not** be treated as a
-  reliable fleet-wide early-warning-lead-time estimate given n=2.
+- **Warning-time KPI is measured from fault start, not from derated/idle status.** A
+  derated/idle-onset to downtime lead time was only computable for 2 of 44 events (Farm B), since
+  Farms A and C never emit `status_type_id` 1 or 2. Script 05 instead measures the hours from
+  each event's logged start (`event_start_id`) to the first downtime in the same file - valid
+  because it's within one turbine's timeline. That covers 33 of 44 events: median 29.7h,
+  interquartile range 13.2-87.8h (Farm C median 28.2h on 27/27; Farm B 357.1h on 4/6; Farm A
+  only 2/11, both already down at fault start). The median is used because a few multi-week
+  cases pull the mean up to ~112h.
 - **Keyword taxonomy is a heuristic, not ground truth.** A description matching multiple
   keywords (e.g. mentioning both hydraulics and a rotor brake) is assigned to the
   higher-priority category by the fixed priority order in script 02; the full list of matched

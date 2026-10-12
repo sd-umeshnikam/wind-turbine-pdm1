@@ -5,5 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // `npm run dev` talks to the chatbot container directly; in Docker, nginx routes /api/chat.
+    proxy: {
+      "/api/chat": "http://localhost:8090",
+    },
   },
 });

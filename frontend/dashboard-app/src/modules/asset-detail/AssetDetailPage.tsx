@@ -10,42 +10,58 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { getTelemetry } from "../../api/client";
-import type { SensorReading } from "../../api/types";
-import type { HealthStatus } from "../../api/types";
+import { getPredictions, getTelemetry } from "../../api/client";
+import type { HealthStatus, Prediction, SensorReading } from "../../api/types";
 import { HealthPill } from "../../shared/HealthPill";
 import { colorForIndex } from "../../shared/theme";
+import { formatRul } from "../../shared/formatRul";
+import { STATUS_LABEL } from "../digital-twin/twinText";
 import "./AssetDetailPage.css";
 
-const COMPONENT_SENSOR: Record<string, string> = {
-  Gearbox: "gearbox_oil_temp",
-  Hydraulics: "hydraulic_oil_temp",
-  "Pitch System": "pitch_motor_temp",
-  Generator: "generator_bearing_temp",
-  Transformer: "transformer_oil_temp",
-  "Rotor Brake": "rotor_brake_pressure",
-  Bearing: "bearing_vibration_rms",
-};
+// Display name -> prediction component names. Mock data uses display names; the real
+// inference server uses model names (e.g. "pitch", "rotor_brake", "vibration").
+const COMPONENTS: { name: string; keys: string[] }[] = [
+  { name: "Gearbox", keys: ["gearbox"] },
+  { name: "Hydraulics", keys: ["hydraulics"] },
+  { name: "Pitch System", keys: ["pitchsystem", "pitch"] },
+  { name: "Generator", keys: ["generator"] },
+  { name: "Transformer", keys: ["transformer"] },
+  { name: "Rotor Brake", keys: ["rotorbrake"] },
+  { name: "Bearing", keys: ["bearing", "vibration"] },
+];
 
-function healthFromValues(values: number[]): HealthStatus {
-  if (values.length === 0) return "green";
-  const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  const latest = values[values.length - 1];
-  const delta = latest - mean;
-  if (delta > 6) return "red";
-  if (delta > 3) return "amber";
-  return "green";
+const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+// Mirrors the alerting service: a short remaining life only counts as serious when the
+// fault classifier also sees risk, so one unreliable model can't turn a part red.
+const CORROBORATION_PROBABILITY = 0.25;
+const ALERT_RUL_HOURS = 72;
+
+function healthFromPrediction(p: Prediction): { status: HealthStatus; note: string } {
+  const corroborated = p.faultProbability >= CORROBORATION_PROBABILITY;
+  const detail = `Fault ${Math.round(p.faultProbability * 100)}% · Remaining life ${formatRul(p.rulHoursP50)}`;
+  if (p.faultProbability > 0.8 || (corroborated && p.rulHoursP50 < 48)) return { status: "red", note: detail };
+  if (corroborated) return { status: "amber", note: detail };
+  if (p.rulHoursP50 < ALERT_RUL_HOURS) {
+    return { status: "amber", note: `${detail} · short life predicted but fault risk is low, verify` };
+  }
+  return { status: "green", note: detail };
 }
 
 export function AssetDetailPage() {
   const { turbineId = "" } = useParams();
   const [readings, setReadings] = useState<SensorReading[] | null>(null);
+  const [predictions, setPredictions] = useState<Prediction[] | null>(null);
 
   useEffect(() => {
     setReadings(null);
+    setPredictions(null);
     const to = new Date();
     const from = new Date(to.getTime() - 48 * 3600_000);
     getTelemetry(turbineId, from.toISOString(), to.toISOString()).then(setReadings);
+    getPredictions(turbineId)
+      .then(setPredictions)
+      .catch(() => setPredictions([]));
   }, [turbineId]);
 
   const { series, sensors } = useMemo(() => {
@@ -63,14 +79,14 @@ export function AssetDetailPage() {
     return { series: rows, sensors: sensorNames };
   }, [readings]);
 
-  const components = useMemo(() => {
-    return Object.entries(COMPONENT_SENSOR).map(([name, sensor]) => {
-      const values = (readings ?? [])
-        .filter((r) => r.sensor === sensor)
-        .map((r) => r.value);
-      return { name, sensor, health: healthFromValues(values) };
-    });
-  }, [readings]);
+  const components = useMemo(
+    () =>
+      COMPONENTS.map(({ name, keys }) => {
+        const p = predictions?.find((x) => keys.includes(normalize(x.component)));
+        return { name, ...(p ? healthFromPrediction(p) : { status: null, note: "No prediction available for this component" }) };
+      }),
+    [predictions],
+  );
 
   return (
     <div className="asset-detail">
@@ -124,15 +140,24 @@ export function AssetDetailPage() {
 
       <section className="component-list">
         <h2>Components</h2>
-        <ul>
-          {components.map((c) => (
-            <li key={c.name}>
-              <span className="component-name">{c.name}</span>
-              <span className="component-sensor">{c.sensor}</span>
-              <HealthPill status={c.health} label={c.health} />
-            </li>
-          ))}
-        </ul>
+        <p className="component-help">Health from the latest model predictions (fault probability and remaining life).</p>
+        {!predictions ? (
+          <p>Loading predictions…</p>
+        ) : (
+          <ul>
+            {components.map((c) => (
+              <li key={c.name}>
+                <span className="component-name">{c.name}</span>
+                <span className="component-sensor">{c.note}</span>
+                {c.status ? (
+                  <HealthPill status={c.status} label={STATUS_LABEL[c.status]} />
+                ) : (
+                  <span className="health-pill no-data">No data</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

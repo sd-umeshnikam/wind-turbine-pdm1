@@ -332,13 +332,14 @@ def build() -> None:
         "the 5% bucketing threshold catching sub-0.02% gaps, not a real quality problem - "
         "the actual missing rate across every one of those columns tops out at 0.0136%."
     )
+    warning = fs["headline_kpis"]["fault_to_downtime_hours"]
     s.add_callout(doc, "LIMITATION",
-        "The \"derated/idle-to-downtime lead time\" KPI is only computable for "
-        f'{fs["headline_kpis"]["lead_time_sample_coverage"]} fleet-wide - '
-        "Farm A and Farm C never emit status_type_id 1 (derated) or 2 (idling) at all; "
-        "only Farm B does, and even there never idling. status_type_id usage is not "
-        "standardized across farms, and this platform reports that honestly rather than "
-        "presenting a fleet-wide lead-time number built on 2 data points.", kind="warning")
+        "\"Warning time before shutdown\" (fault start to first downtime) is measured for "
+        f'{fs["headline_kpis"]["fault_to_downtime_coverage"]}: median {warning["median_hours"]} h, '
+        f'half of cases {warning["p25_hours"]}-{warning["p75_hours"]} h. Farm A barely records a '
+        "downtime status, so most of its failures can't be measured, and status_type_id usage is "
+        "not standardized across farms (Farms A and C never emit derated or idling at all).",
+        kind="warning")
     s.add_callout(doc, "LIMITATION",
         "Event timestamps are anonymized/shifted independently per turbine (observed years "
         "span ~2014-2029 across files) - never usable for cross-turbine or calendar-based "

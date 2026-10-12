@@ -9,8 +9,19 @@ import "./FleetOverviewPage.css";
 
 const summary = fleetSummaryRaw as FleetSummary;
 
+function topCategorySublabel(): string {
+  const counts = summary.fleet_totals.anomaly_count_by_category;
+  const top = summary.headline_kpis.most_common_named_fault_category;
+  const tiedWith = Object.keys(counts).filter(
+    (c) => c !== top && c !== "Other / unclassified" && counts[c] === counts[top],
+  );
+  const base = `${counts[top]} of ${summary.fleet_totals.total_anomaly_events} failures`;
+  return tiedWith.length ? `${base} · tied with ${tiedWith.join(", ")}` : base;
+}
+
 export function FleetOverviewPage() {
   const kpis = summary.headline_kpis;
+  const warning = kpis.fault_to_downtime_hours;
 
   return (
     <div className="fleet-overview">
@@ -37,12 +48,12 @@ export function FleetOverviewPage() {
         <StatTile
           label="Most common fault category"
           value={kpis.most_common_named_fault_category}
-          sublabel={`"${kpis.most_common_fault_category_including_other}" leads if unclassified events count (${summary.fleet_totals.anomaly_count_by_category["Other / unclassified"]})`}
+          sublabel={topCategorySublabel()}
         />
         <StatTile
-          label="Derate/idle → downtime lead time"
-          value={`${kpis.avg_derated_or_idle_to_downtime_lead_time_hours} h`}
-          sublabel={`low coverage: ${kpis.lead_time_sample_coverage}, Farm B only - not a reliable fleet estimate`}
+          label="Warning time before shutdown"
+          value={warning.median_hours === null ? "n/a" : `~${Math.round(warning.median_hours)} h`}
+          sublabel={`Typical time from fault start to turbine stopping. Half of cases: ${warning.p25_hours}–${warning.p75_hours} h · based on ${kpis.fault_to_downtime_coverage}`}
         />
       </section>
 

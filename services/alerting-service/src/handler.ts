@@ -1,4 +1,4 @@
-import { getThresholdConfig, listActiveAlerts, putAlert } from "./dynamoClient";
+import { getThresholdConfig, listActiveAlerts, putAlert, resolveAlert } from "./dynamoClient";
 import { publishAlert } from "./snsClient";
 import {
   Alert,
@@ -38,9 +38,19 @@ function parseDetail(rawEvent: EventBridgeLikeEvent): PredictionEventDetail {
   };
 }
 
-function severityFor(detail: PredictionEventDetail): AlertSeverity {
-  if (detail.faultProbability > 0.9 || detail.rulHoursP50 < 24) return "critical";
-  if (detail.faultProbability > 0.8 || detail.rulHoursP50 < 48) return "high";
+// A short RUL only escalates when the fault classifier also sees real risk. The RUL
+// regressor alone has produced near-zero and negative values on components the
+// classifier rates ~3% fault probability, which made healthy parts "critical".
+export const RUL_CORROBORATION_PROBABILITY = 0.25;
+
+function rulCorroborated(detail: PredictionEventDetail): boolean {
+  return detail.faultProbability >= RUL_CORROBORATION_PROBABILITY;
+}
+
+export function severityFor(detail: PredictionEventDetail): AlertSeverity {
+  const corroborated = rulCorroborated(detail);
+  if (detail.faultProbability > 0.9 || (corroborated && detail.rulHoursP50 < 24)) return "critical";
+  if (detail.faultProbability > 0.8 || (corroborated && detail.rulHoursP50 < 48)) return "high";
   return "medium";
 }
 
@@ -49,9 +59,8 @@ function severityFor(detail: PredictionEventDetail): AlertSeverity {
  * component breach on EITHER fault probability OR remaining useful life raises an
  * alert, because either signal alone is actionable for maintenance scheduling.
  *
- * "No breach" is the common case and is handled explicitly by returning without
- * writing to DynamoDB or publishing to SNS — silence here is correct behavior, not
- * a missed case.
+ * "No breach" is the common case: nothing is published, and any earlier alert for this
+ * turbine+component is resolved so a cleared condition doesn't stay "active" forever.
  */
 async function evaluateAndAlert(rawEvent: EventBridgeLikeEvent): Promise<{ alerted: boolean }> {
   const detail = parseDetail(rawEvent);
@@ -68,18 +77,27 @@ async function evaluateAndAlert(rawEvent: EventBridgeLikeEvent): Promise<{ alert
     detail.faultProbability > thresholds.faultProbabilityThreshold ||
     detail.rulHoursP50 < thresholds.rulHoursP50Threshold;
 
+  const alertId = `${detail.turbineId}#${detail.component}`;
   if (!breached) {
+    try {
+      await resolveAlert(alertId);
+    } catch (err) {
+      console.error("Failed to resolve cleared alert", { alertId, err });
+      throw new UpstreamError("Failed to resolve the cleared alert.", err);
+    }
     return { alerted: false };
   }
 
   const alert: Alert = {
-    id: `${detail.turbineId}#${detail.component}`,
+    id: alertId,
     turbineId: detail.turbineId,
     component: detail.component,
     severity: severityFor(detail),
     message: `${detail.component} on ${detail.turbineId}: faultProbability=${detail.faultProbability.toFixed(
       2,
-    )}, rulHoursP50=${detail.rulHoursP50.toFixed(1)}`,
+    )}, rulHoursP50=${detail.rulHoursP50.toFixed(1)}${
+      rulCorroborated(detail) ? "" : " (short remaining life only; fault probability is low - verify before acting)"
+    }`,
     createdAt: new Date().toISOString(),
     acknowledged: false,
   };

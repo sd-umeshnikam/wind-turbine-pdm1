@@ -8,11 +8,17 @@ export interface FarmSummary {
   n_anomaly_events: number;
   n_normal_events: number;
   anomaly_count_by_category: Record<string, number>;
-  lead_time_hours: {
+  fault_to_downtime_hours: WarningTimeStats & {
     n_events_computable: number;
     n_anomaly_events_total: number;
-    avg_hours: number | null;
   };
+}
+
+// Hours from a fault's logged start to the turbine's first downtime; null when no event qualified.
+export interface WarningTimeStats {
+  median_hours: number | null;
+  p25_hours: number | null;
+  p75_hours: number | null;
 }
 
 export interface FleetSummary {
@@ -28,8 +34,8 @@ export interface FleetSummary {
     total_anomaly_events: number;
     most_common_fault_category_including_other: string;
     most_common_named_fault_category: string;
-    avg_derated_or_idle_to_downtime_lead_time_hours: number;
-    lead_time_sample_coverage: string;
+    fault_to_downtime_hours: WarningTimeStats;
+    fault_to_downtime_coverage: string;
   };
   data_quality_note: string;
 }

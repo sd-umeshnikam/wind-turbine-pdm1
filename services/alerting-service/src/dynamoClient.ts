@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { Alert, AlertThresholdConfig, DEFAULT_THRESHOLDS } from "./types";
 import type { ComponentType } from "../../shared/types";
 
@@ -54,6 +54,18 @@ export async function putAlert(alert: Alert): Promise<void> {
   }
 
   await getDocClient().send(new PutCommand({ TableName: tableName, Item: alert }));
+}
+
+/** Removes the alert for a (turbineId, component) that no longer breaches. The table
+ * holds current alerts only, so a cleared condition must not linger. Idempotent:
+ * deleting an id that has no alert is a no-op. */
+export async function resolveAlert(id: string): Promise<void> {
+  const tableName = process.env.ALERTS_TABLE_NAME;
+  if (!tableName) {
+    throw new Error("ALERTS_TABLE_NAME is not configured.");
+  }
+
+  await getDocClient().send(new DeleteCommand({ TableName: tableName, Key: { id } }));
 }
 
 /**

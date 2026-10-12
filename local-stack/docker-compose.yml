@@ -188,6 +188,29 @@ services:
         condition: service_started
     command: ["./start.sh"]
 
+  # Turbine assistant: RAG over the gold layer + project docs, live predictions from
+  # inference, answered by Groq behind guardrails. GROQ_API_KEY comes from
+  # local-stack/.env (see .env.example); without it the bot runs retrieval-only.
+  chatbot:
+    build:
+      context: ./chatbot
+    container_name: wtb-pdm-chatbot
+    restart: unless-stopped
+    working_dir: /workspace/wind-turbine-pdm-platform/local-stack/chatbot
+    volumes:
+      - ../../:/workspace
+    environment:
+      INFERENCE_URL: http://inference:8080/invocations
+      GATEWAY_GRAPHQL_URL: http://gateway:4000/graphql
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+    ports:
+      - "8090:8090"
+    depends_on:
+      inference:
+        condition: service_started
+
   # Local substitute for CloudFront+S3 (see docs/LINUX_HOSTING_GUIDE.md step 8) -
   # nginx serves the built React dashboard as static files and reverse-proxies
   # /graphql (HTTP + WebSocket) to gateway, so the browser only ever talks to one
@@ -204,6 +227,8 @@ services:
       - "80:80"
     depends_on:
       gateway:
+        condition: service_started
+      chatbot:
         condition: service_started
 
 volumes:

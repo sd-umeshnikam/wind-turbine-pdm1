@@ -4,23 +4,45 @@ const getThresholdConfigMock = vi.fn();
 const putAlertMock = vi.fn();
 const listActiveAlertsMock = vi.fn();
 const publishAlertMock = vi.fn();
+const resolveAlertMock = vi.fn();
 
 vi.mock("../src/dynamoClient", () => ({
   getThresholdConfig: (...args: unknown[]) => getThresholdConfigMock(...args),
   putAlert: (...args: unknown[]) => putAlertMock(...args),
   listActiveAlerts: (...args: unknown[]) => listActiveAlertsMock(...args),
+  resolveAlert: (...args: unknown[]) => resolveAlertMock(...args),
 }));
 vi.mock("../src/snsClient", () => ({
   publishAlert: (...args: unknown[]) => publishAlertMock(...args),
 }));
 
-import { handler } from "../src/handler";
+import { handler, severityFor } from "../src/handler";
+
+describe("severityFor", () => {
+  const d = (faultProbability: number, rulHoursP50: number) => ({ turbineId: "T1", component: "gearbox", faultProbability, rulHoursP50 });
+
+  it("escalates short remaining life only when fault probability corroborates it", () => {
+    expect(severityFor(d(0.5, 10))).toBe("critical");
+    expect(severityFor(d(0.5, 30))).toBe("high");
+  });
+
+  it("keeps an uncorroborated short (or negative) RUL at medium", () => {
+    expect(severityFor(d(0.03, -17.4))).toBe("medium");
+    expect(severityFor(d(0.03, 10))).toBe("medium");
+  });
+
+  it("still escalates on fault probability alone", () => {
+    expect(severityFor(d(0.95, 5000))).toBe("critical");
+    expect(severityFor(d(0.85, 5000))).toBe("high");
+  });
+});
 
 beforeEach(() => {
   getThresholdConfigMock.mockReset();
   putAlertMock.mockReset();
   listActiveAlertsMock.mockReset();
   publishAlertMock.mockReset();
+  resolveAlertMock.mockReset();
 });
 
 describe("alerting-service handler", () => {
@@ -45,7 +67,7 @@ describe("alerting-service handler", () => {
     expect(alertArg.severity).toBe("critical");
   });
 
-  it("does nothing when no threshold is breached", async () => {
+  it("resolves any earlier alert when no threshold is breached", async () => {
     getThresholdConfigMock.mockResolvedValueOnce({
       component: "gearbox",
       faultProbabilityThreshold: 0.7,
@@ -59,6 +81,7 @@ describe("alerting-service handler", () => {
     expect(result).toEqual({ alerted: false });
     expect(putAlertMock).not.toHaveBeenCalled();
     expect(publishAlertMock).not.toHaveBeenCalled();
+    expect(resolveAlertMock).toHaveBeenCalledWith("T001#gearbox");
   });
 
   it("rejects malformed input (missing turbineId) before touching AWS", async () => {

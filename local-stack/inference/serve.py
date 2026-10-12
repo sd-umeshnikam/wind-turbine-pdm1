@@ -214,15 +214,26 @@ def predict_one(turbine_id: str, component: str) -> Optional[dict]:
     healthy_idx = healthy_class_index(classifier_name)
     fault_probability = float(1.0 - proba_row[healthy_idx])
 
+    p10, p50, p90 = _valid_quantiles(
+        _first_pred(p10_model.predict(X)), _first_pred(p50_model.predict(X)), _first_pred(p90_model.predict(X))
+    )
     return {
         "turbine_id": turbine_id,
         "component": component,
         "fault_probability": round(fault_probability, 4),
-        "rul_hours_p10": _first_pred(p10_model.predict(X)),
-        "rul_hours_p50": _first_pred(p50_model.predict(X)),
-        "rul_hours_p90": _first_pred(p90_model.predict(X)),
+        "rul_hours_p10": p10,
+        "rul_hours_p50": p50,
+        "rul_hours_p90": p90,
         "forecast_series": build_forecast_series(component, real_asset_id),
     }
+
+
+def _valid_quantiles(p10: float, p50: float, p90: float) -> tuple[float, float, float]:
+    # The three quantile regressors are trained independently and nothing bounds them:
+    # they've returned negative hours and crossed (P90 < P50). Remaining life can't be
+    # negative and the quantiles must be ordered, so clamp at 0 and sort.
+    low, mid, high = sorted(max(0.0, v) for v in (p10, p50, p90))
+    return low, mid, high
 
 
 @app.post("/invocations")

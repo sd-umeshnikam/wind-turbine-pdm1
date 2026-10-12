@@ -4,6 +4,7 @@ import { FleetOverviewPage } from "./modules/fleet-overview/FleetOverviewPage";
 import { AssetDetailPage } from "./modules/asset-detail/AssetDetailPage";
 import { ForecastsRulPage } from "./modules/forecasts-rul/ForecastsRulPage";
 import { AlertsPage } from "./modules/alerts/AlertsPage";
+import { ChatAssistant } from "./shared/ChatAssistant";
 import "./App.css";
 
 // three.js + fiber/drei are the single largest dependency in this app; code-split
@@ -45,6 +46,7 @@ export function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <ChatAssistant />
     </div>
   );
 }

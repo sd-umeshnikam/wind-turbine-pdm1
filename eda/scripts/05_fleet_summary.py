@@ -7,9 +7,8 @@ what scripts 01-04 actually computed:
   - fleet-wide headline KPIs: total anomaly events, most common fault
     category (both the literal top bucket and the top *named* category
     excluding "Other/unclassified"), and - if reliably computable from the
-    real status_type_id sequences - the average lead time between a
-    derated/idling status onset and the following downtime status onset
-    across anomaly events.
+    real status_type_id sequences - the warning time between a fault's
+    logged start and the turbine's first downtime (see method below).
 
 IMPORTANT real-data finding baked into this script: the number of dataset
 files per farm (22 / 15 / 58) is NOT the turbine count. Each file is one
@@ -17,14 +16,17 @@ event WINDOW for one turbine, and turbines recur across multiple event
 files. The true fleet size (distinct asset_id) is smaller: 5 turbines for
 Farm A, 9 for Farm B, 22 for Farm C.
 
-Lead-time method (documented, not fabricated): for each anomaly event's
-file, take the status_type_id time series, find the first downtime (4)
-timestamp, and walk backward through the immediately preceding contiguous
-run of derated (1) / idling-normal (2) status. If that run exists, lead
-time = (first downtime time) - (start of that run). If status jumps
-straight from normal/other to downtime with no derated/idling lead-in in
-that file, the event contributes no lead-time sample (excluded, not
-imputed as zero).
+Warning-time method (documented, not fabricated): for each anomaly event's
+file, warning time = (first downtime (4) at or after the event's logged start
+row, event_start_id) - (event start). Both timestamps come from the same
+turbine's file, so the per-turbine date anonymization doesn't affect it. Events
+whose file records no downtime after the fault start are excluded, not imputed.
+The median and interquartile range are reported because a few multi-week cases
+make the mean unrepresentative.
+
+This replaced an earlier derated/idle-onset -> downtime metric that only Farm B's
+status codes could support (2 of 44 events): Farms A and C never emit
+status_type_id 1 (derated) or 2 (idling).
 
 Run:
     python eda/scripts/05_fleet_summary.py
@@ -47,7 +49,6 @@ from _common import (  # noqa: E402
     hr,
 )
 
-DERATED_IDLE = {1, 2}
 DOWNTIME = 4
 
 
@@ -59,31 +60,30 @@ def distinct_turbine_count(farm: str) -> int:
     return len(ids)
 
 
-def lead_time_hours_for_event(farm: str, event_id: int) -> float | None:
-    fp = None
-    for f in dataset_files(farm):
-        if f.name == f"comma_{event_id}.csv":
-            fp = f
-            break
+def fault_to_downtime_hours(farm: str, event_id: int, event_start_id: int) -> float | None:
+    fp = next((f for f in dataset_files(farm) if f.name == f"comma_{event_id}.csv"), None)
     if fp is None:
         return None
-    df = pd.read_csv(fp, engine="pyarrow", usecols=["time_stamp", "status_type_id"])
-    df = df.sort_values("time_stamp").reset_index(drop=True)
-    downtime_idx = df.index[df["status_type_id"] == DOWNTIME]
-    if len(downtime_idx) == 0:
+    df = pd.read_csv(fp, engine="pyarrow", usecols=["id", "time_stamp", "status_type_id"])
+    after_start = df[df["id"] >= event_start_id].sort_values("id")
+    if after_start.empty:
         return None
-    first_down = downtime_idx[0]
-    if first_down == 0:
+    downtime = after_start[after_start["status_type_id"] == DOWNTIME]
+    if downtime.empty:
         return None
-    if df.loc[first_down - 1, "status_type_id"] not in DERATED_IDLE:
-        return None
-    i = first_down - 1
-    while i > 0 and df.loc[i - 1, "status_type_id"] in DERATED_IDLE:
-        i -= 1
-    onset_time = df.loc[i, "time_stamp"]
-    down_time = df.loc[first_down, "time_stamp"]
-    hours = (down_time - onset_time).total_seconds() / 3600.0
-    return hours if hours > 0 else None
+    hours = (downtime["time_stamp"].iloc[0] - after_start["time_stamp"].iloc[0]).total_seconds() / 3600.0
+    return round(hours, 1)
+
+
+def warning_time_stats(hours: list[float]) -> dict:
+    if not hours:
+        return {"median_hours": None, "p25_hours": None, "p75_hours": None}
+    s = pd.Series(hours)
+    return {
+        "median_hours": round(float(s.median()), 1),
+        "p25_hours": round(float(s.quantile(0.25)), 1),
+        "p75_hours": round(float(s.quantile(0.75)), 1),
+    }
 
 
 def main() -> None:
@@ -91,7 +91,7 @@ def main() -> None:
     events = pd.read_csv(OUTPUTS_DIR / "events_categorized.csv", parse_dates=["event_start", "event_end"])
 
     per_farm = {}
-    lead_times_all = []
+    warning_all = []
     for farm in FARMS:
         hr(f"Fleet summary - {FARM_META[farm]['label']}")
         n_turbines = distinct_turbine_count(farm)
@@ -104,19 +104,20 @@ def main() -> None:
             .to_dict()
         )
 
-        lead_times_farm = []
-        for eid in farm_events[farm_events["event_label"] == "anomaly"]["event_id"]:
-            lt = lead_time_hours_for_event(farm, int(eid))
-            if lt is not None:
-                lead_times_farm.append(lt)
-        lead_times_all.extend(lead_times_farm)
+        warning_farm = []
+        for ev in farm_events[farm_events["event_label"] == "anomaly"].itertuples():
+            h = fault_to_downtime_hours(farm, int(ev.event_id), int(ev.event_start_id))
+            if h is not None:
+                warning_farm.append(h)
+        warning_all.extend(warning_farm)
+        farm_stats = warning_time_stats(warning_farm)
 
         print(f"  Distinct turbines (asset_id): {n_turbines}  "
               f"(vs {len(dataset_files(farm))} event files - each turbine appears in multiple event windows)")
         print(f"  Events: {n_anomaly} anomaly / {n_normal} normal")
         print(f"  Anomaly by category: {cat_counts}")
-        print(f"  Lead-time computable for {len(lead_times_farm)}/{n_anomaly} anomaly events"
-              + (f", avg {sum(lead_times_farm)/len(lead_times_farm):.1f}h" if lead_times_farm else ""))
+        print(f"  Fault-start -> downtime computable for {len(warning_farm)}/{n_anomaly} anomaly events"
+              + (f", median {farm_stats['median_hours']}h" if warning_farm else ""))
 
         per_farm[farm] = {
             "label": FARM_META[farm]["label"],
@@ -125,10 +126,10 @@ def main() -> None:
             "n_anomaly_events": n_anomaly,
             "n_normal_events": n_normal,
             "anomaly_count_by_category": cat_counts,
-            "lead_time_hours": {
-                "n_events_computable": len(lead_times_farm),
+            "fault_to_downtime_hours": {
+                "n_events_computable": len(warning_farm),
                 "n_anomaly_events_total": n_anomaly,
-                "avg_hours": round(sum(lead_times_farm) / len(lead_times_farm), 2) if lead_times_farm else None,
+                **farm_stats,
             },
         }
 
@@ -152,10 +153,8 @@ def main() -> None:
             "total_anomaly_events": int((events["event_label"] == "anomaly").sum()),
             "most_common_fault_category_including_other": most_common_overall,
             "most_common_named_fault_category": most_common_named,
-            "avg_derated_or_idle_to_downtime_lead_time_hours": (
-                round(sum(lead_times_all) / len(lead_times_all), 2) if lead_times_all else None
-            ),
-            "lead_time_sample_coverage": f"{len(lead_times_all)}/{int((events['event_label']=='anomaly').sum())} anomaly events",
+            "fault_to_downtime_hours": warning_time_stats(warning_all),
+            "fault_to_downtime_coverage": f"{len(warning_all)}/{int((events['event_label']=='anomaly').sum())} anomaly events",
         },
         "data_quality_note": (
             "Turbine counts are distinct asset_id values per farm, not dataset file counts - "
