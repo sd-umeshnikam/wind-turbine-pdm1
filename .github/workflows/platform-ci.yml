@@ -1,0 +1,38 @@
+name: platform-ci
+
+on:
+  push:
+    paths: ["platform/**", "frontend/console/**", "deploy/**", ".github/workflows/platform-ci.yml"]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
+    services:
+      db:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: wtpdm
+          POSTGRES_PASSWORD: wtpdm
+          POSTGRES_DB: wtpdm
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U wtpdm" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      WTPDM_DATABASE_URL: postgresql+psycopg://wtpdm:wtpdm@localhost:5434/wtpdm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install ".[dev]"
+      - run: ruff check wtpdm tests && ruff format --check wtpdm tests
+      - run: mypy wtpdm
+      - run: alembic -c wtpdm/db/alembic.ini upgrade head
+      - run: pytest -q --cov=wtpdm --cov-report=term-missing
+      - name: migration downgrade/upgrade roundtrip
+        run: alembic -c wtpdm/db/alembic.ini downgrade base && alembic -c wtpdm/db/alembic.ini upgrade head

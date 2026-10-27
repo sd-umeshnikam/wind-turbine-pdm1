@@ -47,3 +47,10 @@ local-stack/mlruns/
 local-stack/mlflow.db
 local-stack/**/ivy2/
 local-stack/pipeline/.ivy2/
+
+# platform v2
+deploy/compose/.env
+platform/.ruff_cache/
+platform/.mypy_cache/
+platform/.pytest_cache/
+__pycache__/
