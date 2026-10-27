@@ -43,6 +43,8 @@ export interface Prediction {
   rulHoursP50: number;
   rulHoursP90: number;
   forecastSeries: ForecastPoint[];
+  /** Timestamp of the sensor data the prediction is based on (null if unknown). */
+  asOf?: string | null;
 }
 
 // AWSJSON on the schema is a free-form map (component name -> health status);

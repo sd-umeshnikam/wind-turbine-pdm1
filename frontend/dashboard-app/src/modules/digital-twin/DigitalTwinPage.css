@@ -1,4 +1,4 @@
-.twin-links {
+﻿.twin-links {
   display: flex;
   gap: 16px;
   margin-top: 6px;
@@ -179,12 +179,12 @@
 }
 
 .twin-status .dot.live {
-  background: #2e8540;
+  background: var(--success);
   animation: twin-pulse 1.6s ease-in-out infinite;
 }
 
 .twin-status .dot.paused {
-  background: #d98a12;
+  background: var(--warning);
 }
 
 @keyframes twin-pulse {

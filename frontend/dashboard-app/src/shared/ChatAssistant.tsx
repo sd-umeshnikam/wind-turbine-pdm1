@@ -24,9 +24,9 @@ function Reply({ reply }: { reply: ChatReply }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      {reply.mode === "retrieval_only" && <span className="chat-tag">Retrieval only</span>}
+      {reply.mode === "retrieval_only" && <span className="chat-tag">Limited mode</span>}
       {reply.guardrail.flags?.includes("ungrounded_figures") && (
-        <span className="chat-tag warn">Some figures unverified</span>
+        <span className="chat-tag warn">Unverified figures</span>
       )}
       {reply.sources.length + reply.live_sources.length > 0 && (
         <div className="chat-sources">
@@ -90,7 +90,7 @@ export function ChatAssistant() {
     } catch {
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: "Sorry, the assistant isn't reachable right now. Please try again shortly.", error: true },
+        { role: "assistant", content: "Assistant unavailable. Try again.", error: true },
       ]);
     } finally {
       setBusy(false);
@@ -122,7 +122,7 @@ export function ChatAssistant() {
             <div>
               <strong>Turbine Assistant</strong>
               <span className="chat-sub">
-                {llmReady === false ? "Retrieval-only mode (Groq key not set)" : "Answers from this platform's data"}
+                {llmReady === false ? "Limited mode" : "Answers from platform data"}
                 {turbineId && ` · viewing ${turbineId}`}
               </span>
             </div>
@@ -134,7 +134,7 @@ export function ChatAssistant() {
           <div className="chat-messages" ref={listRef} aria-live="polite">
             {messages.length === 0 && (
               <div className="chat-empty">
-                <p>Ask about turbines, past failures, remaining life, alerts, or how to read this dashboard.</p>
+                <p>Ask about turbines, failures, alerts or remaining life.</p>
                 {suggestions(turbineId).map((s) => (
                   <button key={s} type="button" className="chat-suggestion" onClick={() => void ask(s)}>
                     {s}

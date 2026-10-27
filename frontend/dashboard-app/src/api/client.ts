@@ -1,4 +1,4 @@
-// GraphQL client for the AppSync API defined in
+﻿// GraphQL client for the AppSync API defined in
 // infra/terraform/modules/appsync-api/schema.graphql.
 //
 // Client approach: plain `fetch`-based GraphQL calls, not Amplify's
@@ -24,6 +24,8 @@ import type {
   SensorReading,
   TwinState,
 } from "./types";
+
+import { reportDemoData } from "./dataSource";
 
 const APPSYNC_URL = import.meta.env.VITE_APPSYNC_URL as string | undefined;
 const APPSYNC_API_KEY = import.meta.env.VITE_APPSYNC_API_KEY as string | undefined;
@@ -90,11 +92,11 @@ function mockTelemetry(turbineId: string, from: string, to: string): SensorReadi
   const points = 48;
   const stepMs = (toMs - fromMs) / points;
   const sensors: Array<{ name: string; unit: string; base: number; amp: number }> = [
-    { name: "gearbox_oil_temp", unit: "°C", base: 55, amp: 8 },
-    { name: "hydraulic_oil_temp", unit: "°C", base: 42, amp: 6 },
-    { name: "pitch_motor_temp", unit: "°C", base: 38, amp: 5 },
-    { name: "generator_bearing_temp", unit: "°C", base: 60, amp: 7 },
-    { name: "transformer_oil_temp", unit: "°C", base: 50, amp: 6 },
+    { name: "gearbox_oil_temp", unit: "Â°C", base: 55, amp: 8 },
+    { name: "hydraulic_oil_temp", unit: "Â°C", base: 42, amp: 6 },
+    { name: "pitch_motor_temp", unit: "Â°C", base: 38, amp: 5 },
+    { name: "generator_bearing_temp", unit: "Â°C", base: 60, amp: 7 },
+    { name: "transformer_oil_temp", unit: "Â°C", base: 50, amp: 6 },
     { name: "rotor_brake_pressure", unit: "bar", base: 120, amp: 10 },
     { name: "bearing_vibration_rms", unit: "mG", base: 3, amp: 2 },
   ];
@@ -129,7 +131,8 @@ export async function getTelemetry(
       to,
     });
     return data.telemetry;
-  } catch {
+  } catch (err) {
+    reportDemoData("telemetry", err);
     return mockTelemetry(turbineId, from, to);
   }
 }
@@ -149,18 +152,20 @@ const PREDICTIONS_QUERY = /* GraphQL */ `
         timestamp
         value
       }
+      asOf
     }
   }
 `;
 
-function mockForecastSeries(baseRul: number, volatility: number): ForecastPoint[] {
+// Matches the real trend forecaster's output: a daily health index (higher is
+// healthier), not remaining life. Components with a higher fault probability drift down.
+function mockHealthSeries(faultProbability: number): ForecastPoint[] {
   const now = new Date();
   const points: ForecastPoint[] = [];
   for (let i = 0; i < 14; i++) {
-    const t = new Date(now.getTime() + i * 24 * 3600_000).toISOString();
-    const decay = Math.max(0, baseRul - i * (baseRul / 16));
-    const noise = Math.sin(i * 1.9) * volatility;
-    points.push({ timestamp: t, value: Math.round((decay + noise) * 10) / 10 });
+    const t = new Date(now.getTime() + (i + 1) * 24 * 3600_000).toISOString();
+    const value = 0.6 - faultProbability - i * faultProbability * 0.08 + Math.sin(i * 1.9) * 0.04;
+    points.push({ timestamp: t, value: Math.round(value * 100) / 100 });
   }
   return points;
 }
@@ -184,7 +189,8 @@ function mockPredictions(turbineId: string, component?: string): Prediction[] {
       rulHoursP10: Math.max(0, d.p50 - d.spread),
       rulHoursP50: d.p50,
       rulHoursP90: d.p50 + d.spread,
-      forecastSeries: mockForecastSeries(d.p50, d.spread / 4),
+      forecastSeries: mockHealthSeries(d.prob),
+      asOf: new Date().toISOString(),
     }));
 }
 
@@ -195,10 +201,11 @@ export async function getPredictions(
   try {
     const data = await graphqlRequest<{ predictions: Prediction[] }>(PREDICTIONS_QUERY, {
       turbineId,
-      component: component ?? null,
+      ...(component ? { component } : {}),
     });
     return data.predictions;
-  } catch {
+  } catch (err) {
+    reportDemoData("predictions", err);
     return mockPredictions(turbineId, component);
   }
 }
@@ -222,7 +229,7 @@ const ACTIVE_ALERTS_QUERY = /* GraphQL */ `
 function mockActiveAlerts(): Alert[] {
   const now = new Date();
   const raw: Array<[string, string, string, string, number]> = [
-    ["A-03", "Hydraulics", "high", "Hydraulic oil temperature sustained 14°C above baseline", 2],
+    ["A-03", "Hydraulics", "high", "Hydraulic oil temperature sustained 14Â°C above baseline", 2],
     ["C-11", "Pitch System", "critical", "Axis 2 pitch motor not ready-to-operate", 1],
     ["C-06", "Gearbox", "medium", "Gearbox oil pressure erratic, intermittent drop-outs", 9],
     ["A-01", "Transformer", "low", "Transformer temperature trending upward, within limits", 30],
@@ -245,7 +252,8 @@ export async function getActiveAlerts(): Promise<Alert[]> {
   try {
     const data = await graphqlRequest<{ activeAlerts: Alert[] }>(ACTIVE_ALERTS_QUERY, {});
     return data.activeAlerts;
-  } catch {
+  } catch (err) {
+    reportDemoData("alerts", err);
     return mockActiveAlerts();
   }
 }

@@ -25,6 +25,7 @@ export interface DatabricksServingResponse {
     rul_hours_p50: number;
     rul_hours_p90: number;
     forecast_series?: Array<{ timestamp: string; value: number }>;
+    as_of?: string;
   }>;
 }
 

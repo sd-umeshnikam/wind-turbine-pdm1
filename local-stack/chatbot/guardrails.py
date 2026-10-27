@@ -72,20 +72,15 @@ class InputCheck:
 def check_input(raw: str) -> InputCheck:
     text = (raw or "").strip()
     if not text:
-        return InputCheck(True, text, "empty", "Please type a question about the wind turbines or the dashboard.")
+        return InputCheck(True, text, "empty", "Type a question.")
     if len(text) > MAX_INPUT_CHARS:
-        return InputCheck(True, text, "too_long",
-                          f"That message is too long. Please keep questions under {MAX_INPUT_CHARS} characters.")
+        return InputCheck(True, text, "too_long", f"Too long. Keep it under {MAX_INPUT_CHARS} characters.")
     lowered = text.lower()
     if any(re.search(p, lowered) for p in INJECTION_PATTERNS):
-        return InputCheck(True, text, "prompt_injection",
-                          "I can't change how I work or share my configuration. "
-                          "I can answer questions about the turbines, their faults and this dashboard.")
+        return InputCheck(True, text, "prompt_injection", "I can't do that. Ask me about the turbines.")
     if any(re.search(p, lowered) for p in UNSAFE_PATTERNS):
         return InputCheck(True, text, "unsafe_operation",
-                          "I can't help with bypassing or disabling turbine safety systems, or working around "
-                          "safety procedures. That needs a qualified technician following the site's lockout "
-                          "and safety rules. I can explain how a component works or what its readings mean.")
+                          "I can't help with bypassing safety systems. Please contact a qualified technician.")
     flags = []
     redacted = EMAIL_RE.sub("[email removed]", text)
     redacted = PHONE_RE.sub("[phone removed]", redacted)
@@ -103,11 +98,7 @@ def is_on_topic(text: str, top_retrieval_score: float, mentions_turbine: bool) -
     return mentions_turbine or bool(words & DOMAIN_TERMS) or top_retrieval_score >= ON_TOPIC_MIN_SCORE
 
 
-OFF_TOPIC_MESSAGE = (
-    "I can only help with this wind turbine platform: the turbines and farms, component faults, "
-    "remaining-life predictions, alerts and how to read the dashboard. Try asking something like "
-    "\"Why does Farm C have so many pitch faults?\""
-)
+OFF_TOPIC_MESSAGE = "I can only answer questions about the turbines and this dashboard."
 
 
 def _numbers(text: str) -> set[float]:
@@ -155,8 +146,7 @@ def check_output(answer: str, context: str, secrets: tuple[str, ...] = ()) -> Ou
     missing = ungrounded_numbers(text, context)
     if missing:
         flags.append("ungrounded_figures")
-        text += ("\n\nNote: I couldn't verify these figures against the platform's data: "
-                 + ", ".join(missing[:5]) + ". Please double-check them on the dashboard.")
+        text += "\n\nUnverified: " + ", ".join(missing[:5]) + "."
     if len(text) > MAX_OUTPUT_CHARS:
         text = text[:MAX_OUTPUT_CHARS].rsplit(" ", 1)[0] + "…"
         flags.append("truncated")

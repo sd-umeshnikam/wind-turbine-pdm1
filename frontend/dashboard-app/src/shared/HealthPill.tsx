@@ -1,19 +1,28 @@
-import { HEALTH_COLORS, SEVERITY_COLORS } from "./theme";
 import "./HealthPill.css";
 
+type Tone = "success" | "warning" | "danger" | "critical" | "neutral";
+
+const HEALTH_TONE: Record<"green" | "amber" | "red", Tone> = {
+  green: "success",
+  amber: "warning",
+  red: "danger",
+};
+
+const SEVERITY_TONE: Record<string, Tone> = {
+  low: "success",
+  medium: "warning",
+  high: "danger",
+  critical: "critical",
+};
+
+export function Badge({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  return <span className={`badge badge-${tone}`}>{children}</span>;
+}
+
 export function HealthPill({ status, label }: { status: "green" | "amber" | "red"; label: string }) {
-  return (
-    <span className="health-pill" style={{ backgroundColor: HEALTH_COLORS[status] }}>
-      {label}
-    </span>
-  );
+  return <Badge tone={HEALTH_TONE[status]}>{label}</Badge>;
 }
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  const color = SEVERITY_COLORS[severity.toLowerCase()] ?? SEVERITY_COLORS.medium;
-  return (
-    <span className="health-pill" style={{ backgroundColor: color }}>
-      {severity}
-    </span>
-  );
+  return <Badge tone={SEVERITY_TONE[severity.toLowerCase()] ?? "warning"}>{severity}</Badge>;
 }

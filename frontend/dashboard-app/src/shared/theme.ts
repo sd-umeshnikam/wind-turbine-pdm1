@@ -1,17 +1,10 @@
-// Single source of truth for color semantics so severity/health read the same
-// way in every module (fleet overview categories, alert badges, twin health pills).
-
+// Hex values for places that can't read CSS variables (three.js materials, chart
+// fills). Keep in step with --success / --warning / --danger in index.css; badges and
+// all other UI use the CSS tokens directly.
 export const HEALTH_COLORS: Record<"green" | "amber" | "red", string> = {
-  green: "#2e8540",
+  green: "#1f8a4c",
   amber: "#d98a12",
-  red: "#c8382c",
-};
-
-export const SEVERITY_COLORS: Record<string, string> = {
-  low: HEALTH_COLORS.green,
-  medium: HEALTH_COLORS.amber,
-  high: HEALTH_COLORS.red,
-  critical: HEALTH_COLORS.red,
+  red: "#d03b2f",
 };
 
 // Distinct, colorblind-considerate categorical palette used for farms and

@@ -9,30 +9,30 @@ export const STATUS_LABEL: Record<HealthStatus, string> = {
 export const COMPONENT_INFO: Record<string, { where: string; what: string }> = {
   Gearbox: {
     where: "Middle of the nacelle",
-    what: "Speeds up the slow blade rotation for the generator. Watch for oil pressure or temperature drifting.",
+    what: "Speeds up rotation for the generator. Watch oil pressure and temperature.",
   },
   Hydraulics: {
-    where: "Unit on top of the nacelle",
-    what: "Supplies pressure to the brakes and pitch. Watch for pressure falling or the pump running more often.",
+    where: "Top of the nacelle",
+    what: "Powers the brakes and pitch. Watch for falling pressure.",
   },
   "Pitch System": {
-    where: "Blue hub at the front",
-    what: "Turns each blade to the right angle for the wind. A blade that stops responding shuts the turbine down.",
+    where: "Hub",
+    what: "Sets the blade angle. A stuck blade stops the turbine.",
   },
   Generator: {
     where: "Back of the nacelle",
-    what: "Turns rotation into electricity. Bearing and winding wear usually shows as rising temperature.",
+    what: "Makes the electricity. Watch bearing temperature.",
   },
   Transformer: {
-    where: "Box at the tower base",
-    what: "Steps the voltage up for the grid. Oil temperature is the best early warning.",
+    where: "Tower base",
+    what: "Steps up voltage for the grid. Watch oil temperature.",
   },
   "Rotor Brake": {
-    where: "Disc between gearbox and generator",
-    what: "Holds the rotor still for maintenance. Low hydraulic pressure means it can't grip properly.",
+    where: "Between gearbox and generator",
+    what: "Holds the rotor still. Needs hydraulic pressure to grip.",
   },
   Bearing: {
-    where: "Front of the nacelle, behind the hub",
-    what: "Carries the weight of the rotor and blades. Damage shows up in vibration before temperature.",
+    where: "Front of the nacelle",
+    what: "Carries the rotor. Damage shows in vibration first.",
   },
 };

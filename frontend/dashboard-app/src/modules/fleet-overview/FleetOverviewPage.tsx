@@ -15,7 +15,7 @@ function topCategorySublabel(): string {
   const tiedWith = Object.keys(counts).filter(
     (c) => c !== top && c !== "Other / unclassified" && counts[c] === counts[top],
   );
-  const base = `${counts[top]} of ${summary.fleet_totals.total_anomaly_events} failures`;
+  const base = `${counts[top]} failures`;
   return tiedWith.length ? `${base} · tied with ${tiedWith.join(", ")}` : base;
 }
 
@@ -28,32 +28,30 @@ export function FleetOverviewPage() {
       <header className="module-header">
         <h1>Fleet Overview</h1>
         <p className="module-subtitle">
-          {summary.fleet_totals.total_turbines} turbines across {Object.keys(summary.farms).length}{" "}
-          farms - computed from {summary.fleet_totals.total_event_files} SCADA event-window
-          {/* files (distinct <code>asset_id</code> values, not file count; see caveat below). */}
+          {summary.fleet_totals.total_turbines} turbines · {Object.keys(summary.farms).length} wind farms
         </p>
       </header>
 
       <section className="tile-row">
         <StatTile
-          label="Total turbines (fleet)"
+          label="Turbines"
           value={String(summary.fleet_totals.total_turbines)}
           sublabel={`A: ${summary.farms.A.n_turbines} · B: ${summary.farms.B.n_turbines} · C: ${summary.farms.C.n_turbines}`}
         />
         <StatTile
-          label="Total anomaly events"
+          label="Failures"
           value={String(kpis.total_anomaly_events)}
-          sublabel={`vs. ${summary.fleet_totals.total_normal_events} normal reference events`}
+          sublabel={`${summary.fleet_totals.total_normal_events} normal periods`}
         />
         <StatTile
-          label="Most common fault category"
+          label="Top fault type"
           value={kpis.most_common_named_fault_category}
           sublabel={topCategorySublabel()}
         />
         <StatTile
-          label="Warning time before shutdown"
+          label="Warning before shutdown"
           value={warning.median_hours === null ? "n/a" : `~${Math.round(warning.median_hours)} h`}
-          sublabel={`Typical time from fault start to turbine stopping. Half of cases: ${warning.p25_hours}–${warning.p75_hours} h · based on ${kpis.fault_to_downtime_coverage}`}
+          sublabel={`Typical range ${Math.round(warning.p25_hours ?? 0)}–${Math.round(warning.p75_hours ?? 0)} h`}
         />
       </section>
 
@@ -80,9 +78,6 @@ export function FleetOverviewPage() {
 
       <section className="turbine-picker">
         <h2>Turbines</h2>
-        <p className="module-subtitle">
-          Select a turbine to open its asset detail, digital twin, or forecast/RUL view.
-        </p>
         <div className="farm-columns">
           {Object.entries(summary.farms).map(([farmId, farm]) => (
             <div key={farmId} className="farm-column">

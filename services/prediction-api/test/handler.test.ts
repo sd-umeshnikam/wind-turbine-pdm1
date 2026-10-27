@@ -39,8 +39,17 @@ describe("prediction-api handler", () => {
         rulHoursP50: 120,
         rulHoursP90: 300,
         forecastSeries: [{ timestamp: "2026-01-01T00:00:00Z", value: 0.6 }],
+        asOf: null,
       },
     ]);
+  });
+
+  it("treats an explicit null component as 'all components'", async () => {
+    invokeModelMock.mockResolvedValueOnce({ predictions: [] });
+
+    await handler({ arguments: { turbineId: "T001", component: null } });
+
+    expect(invokeModelMock).toHaveBeenCalledWith({ turbineId: "T001", component: undefined });
   });
 
   it("rejects malformed input (missing turbineId)", async () => {

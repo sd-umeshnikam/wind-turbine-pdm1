@@ -36,6 +36,9 @@ type Prediction {
   rulHoursP50: Float!
   rulHoursP90: Float!
   forecastSeries: [ForecastPoint!]!
+  # Timestamp of the sensor data the prediction was made from. RUL counts down from
+  # here, not from "now" - historical/replayed data can be months old.
+  asOf: AWSDateTime
 }
 
 # Published by digital-twin-service; componentHealth is a free-form map

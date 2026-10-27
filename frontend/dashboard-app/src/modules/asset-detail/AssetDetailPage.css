@@ -1,26 +1,75 @@
-.chart-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
+/* Cards come from the shared styles in index.css. */
+.asset-detail .chart-card {
+  margin-bottom: var(--space-6);
 }
 
-.chart-card h2 {
-  font-size: 0.95rem;
-  margin: 0 0 8px;
+.sensor-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-height: 96px;
+  margin-top: var(--space-3);
+  overflow-y: auto;
+}
+
+.sensor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.sensor-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.sensor-chip[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.chart-toolbar p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .component-list {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.component-list h2,
+.component-help {
+  padding: 0 var(--space-5);
 }
 
 .component-list h2 {
-  font-size: 0.95rem;
-  margin: 0 0 10px;
+  margin-top: var(--space-5);
+}
+
+.component-help {
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .component-list ul {
@@ -30,34 +79,34 @@
 }
 
 .component-list li {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(130px, 180px) 1fr auto;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
 }
 
-.component-list li:last-child {
-  border-bottom: none;
+.component-list li:hover {
+  background: var(--surface-muted);
 }
 
 .component-name {
   font-weight: 600;
-  min-width: 120px;
 }
 
 .component-sensor {
   color: var(--text-muted);
-  font-size: 0.82rem;
-  flex: 1;
+  font-size: var(--text-sm);
 }
 
-.component-help {
-  margin: -4px 0 8px;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
+@media (max-width: 640px) {
+  .component-list li {
+    grid-template-columns: 1fr auto;
+  }
 
-.health-pill.no-data {
-  background: var(--text-muted);
+  .component-sensor {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }

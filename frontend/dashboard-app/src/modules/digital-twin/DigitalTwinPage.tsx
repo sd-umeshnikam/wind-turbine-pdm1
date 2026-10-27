@@ -54,11 +54,11 @@ function HealthSummary({ health }: { health: Record<string, HealthStatus> }) {
   return (
     <div className="twin-summary" style={{ borderColor: HEALTH_COLORS[worst] }}>
       {worst === "green" ? (
-        <strong>All {entries.length} parts are healthy</strong>
+        <strong>All parts healthy</strong>
       ) : (
         <>
           <strong>
-            {faults.length + watch.length} of {entries.length} parts need attention
+            {faults.length + watch.length} need attention
           </strong>
           {faults.length > 0 && <span>Fault: {faults.join(", ")}</span>}
           {watch.length > 0 && <span>Watch: {watch.join(", ")}</span>}
@@ -94,10 +94,7 @@ export function DigitalTwinPage() {
     <div className="digital-twin">
       <header className="module-header">
         <h1>Digital Twin - {turbineId}</h1>
-        <p className="module-subtitle">
-          A live 3D view of this turbine. Each part is coloured by its health. Click a part, or a
-          name in the list, to see what it does.
-        </p>
+        <p className="module-subtitle">Parts are coloured by health. Click one for details.</p>
         <nav className="twin-links">
           <Link to={`/assets/${turbineId}`}>Sensor history</Link>
           <Link to={`/forecasts/${turbineId}`}>Forecasts &amp; RUL</Link>
@@ -144,8 +141,8 @@ export function DigitalTwinPage() {
 
           <p className="twin-hint">
             {has3D
-              ? "Drag to rotate · Scroll or pinch to zoom · Click a part for details"
-              : "3D view needs graphics acceleration, so this is a 2D diagram. Click a part for details."}
+              ? "Drag to rotate · Scroll to zoom"
+              : "2D view (3D needs graphics acceleration)"}
           </p>
 
           <ul className="twin-legend" aria-label="Colour legend">
@@ -173,12 +170,12 @@ export function DigitalTwinPage() {
                 <div>
                   <span className="label">Rotor speed</span>
                   <span className="value">{state.rotorSpeedRpm.toFixed(1)} rpm</span>
-                  <span className="help">How fast the blades turn</span>
+                  
                 </div>
                 <div>
                   <span className="label">Blade pitch</span>
                   <span className="value">{state.pitchAngleDeg.toFixed(1)}°</span>
-                  <span className="help">Blade angle to the wind</span>
+                  
                 </div>
               </div>
 
@@ -206,7 +203,7 @@ export function DigitalTwinPage() {
                   </h3>
                   <p className="where">{selectedInfo.where}</p>
                   <p>{selectedInfo.what}</p>
-                  <Link to={`/forecasts/${turbineId}`}>See remaining life forecast →</Link>
+                  <Link to={`/forecasts/${turbineId}`}>Remaining life →</Link>
                 </div>
               )}
             </>

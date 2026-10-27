@@ -1,4 +1,4 @@
-.chat-launcher {
+﻿.chat-launcher {
   position: fixed;
   right: 20px;
   bottom: 20px;
@@ -10,11 +10,11 @@
   border: none;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .chat-panel {
@@ -30,7 +30,7 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
@@ -112,7 +112,7 @@
 .chat-msg.user {
   align-self: flex-end;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
 }
 
 .chat-msg.assistant {
@@ -121,11 +121,11 @@
 }
 
 .chat-msg.blocked {
-  border: 1px solid #d98a12;
+  border: 1px solid var(--warning);
 }
 
 .chat-msg.error {
-  border: 1px solid #c8382c;
+  border: 1px solid var(--danger);
 }
 
 .chat-msg.typing {
@@ -144,8 +144,8 @@
 }
 
 .chat-tag.warn {
-  background: #d98a12;
-  color: #fff;
+  background: var(--warning-soft);
+  color: var(--warning-text);
 }
 
 .chat-sources button {
@@ -210,7 +210,7 @@
   border: none;
   border-radius: 6px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   font: inherit;
   font-size: 0.85rem;
   cursor: pointer;

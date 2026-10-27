@@ -62,6 +62,8 @@ export interface Prediction {
   rulHoursP50: number;
   rulHoursP90: number;
   forecastSeries: ForecastPoint[];
+  /** Timestamp of the sensor data the prediction is based on. */
+  asOf: string | null;
 }
 
 /** Published by digital-twin-service on the `onTwinUpdate(turbineId)` subscription. */

@@ -20,7 +20,9 @@ function parseArgs(rawArgs: unknown): PredictionQueryArgs {
     throw new ValidationError("turbineId is required and must be a valid identifier.");
   }
 
-  const component = args.component;
+  // `component` is a nullable GraphQL argument: an explicit null means "all components",
+  // the same as omitting it.
+  const component = args.component ?? undefined;
   if (component !== undefined && typeof component !== "string") {
     throw new ValidationError("component, if provided, must be a string.");
   }
@@ -63,5 +65,6 @@ export async function handler(
       timestamp: point.timestamp,
       value: point.value,
     })),
+    asOf: p.as_of ?? null,
   }));
 }

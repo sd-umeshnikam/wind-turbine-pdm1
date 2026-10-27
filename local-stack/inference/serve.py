@@ -155,34 +155,36 @@ def feature_frame(row: pd.Series) -> pd.DataFrame:
     return pd.DataFrame([row[cols].to_dict()])
 
 
-def find_trend_model_for_asset(component: str, real_asset_id: str):
-    key = (component, str(real_asset_id))
+def find_trend_model_for_asset(component: str, farm: str, real_asset_id: str):
+    key = (component, farm, str(real_asset_id))
     if key not in _trend_model_cache:
-        _trend_model_cache[key] = _load_trend_model(component, real_asset_id)
+        _trend_model_cache[key] = _load_trend_model(component, farm, real_asset_id)
     return _trend_model_cache[key]
 
 
-def _load_trend_model(component: str, real_asset_id: str):
+def _load_trend_model(component: str, farm: str, real_asset_id: str):
     name = f"{component}_trend_forecaster_{ENV_LABEL}"
     try:
         versions = client.search_model_versions(f"name='{name}'")
     except Exception:
         return None
     for v in versions:
-        run = client.get_run(v.run_id)
-        if run.data.tags.get("asset_id") == str(real_asset_id):
+        tags = client.get_run(v.run_id).data.tags
+        # Raw asset_id values repeat across farms, so the farm must match too -
+        # matching on asset_id alone gave C-8 Farm A's model.
+        if tags.get("asset_id") == str(real_asset_id) and tags.get("farm") == farm:
             return mlflow.statsmodels.load_model(f"models:/{name}/{v.version}")
     return None
 
 
-def build_forecast_series(component: str, real_asset_id: str) -> list[dict]:
-    model = find_trend_model_for_asset(component, real_asset_id)
+def build_forecast_series(component: str, farm: str, real_asset_id: str, as_of: datetime) -> list[dict]:
+    model = find_trend_model_for_asset(component, farm, real_asset_id)
     if model is None:
         return []
     forecast = model.forecast(FORECAST_HORIZON_DAYS)
-    now = datetime.now(timezone.utc)
+    # The series continues from the asset's latest data, which can be long before today.
     return [
-        {"timestamp": (now + timedelta(days=i + 1)).isoformat(), "value": float(v)}
+        {"timestamp": (as_of + timedelta(days=i + 1)).isoformat(), "value": float(v)}
         for i, v in enumerate(forecast)
     ]
 
@@ -217,6 +219,9 @@ def predict_one(turbine_id: str, component: str) -> Optional[dict]:
     p10, p50, p90 = _valid_quantiles(
         _first_pred(p10_model.predict(X)), _first_pred(p50_model.predict(X)), _first_pred(p90_model.predict(X))
     )
+    as_of = pd.Timestamp(row["time_stamp"]).to_pydatetime()
+    if as_of.tzinfo is None:
+        as_of = as_of.replace(tzinfo=timezone.utc)
     return {
         "turbine_id": turbine_id,
         "component": component,
@@ -224,7 +229,8 @@ def predict_one(turbine_id: str, component: str) -> Optional[dict]:
         "rul_hours_p10": p10,
         "rul_hours_p50": p50,
         "rul_hours_p90": p90,
-        "forecast_series": build_forecast_series(component, real_asset_id),
+        "forecast_series": build_forecast_series(component, farm, real_asset_id, as_of),
+        "as_of": as_of.isoformat(),
     }
 
 

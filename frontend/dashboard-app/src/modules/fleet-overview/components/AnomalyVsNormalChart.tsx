@@ -1,4 +1,4 @@
-import {
+﻿import {
   Bar,
   BarChart,
   CartesianGrid,
@@ -27,7 +27,7 @@ export function AnomalyVsNormalChart({ summary }: Props) {
   return (
     <ResponsiveContainer width="100%" height={340}>
       <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="farm" tick={{ fontSize: 12 }} />
         <YAxis
           tick={{ fontSize: 12 }}
@@ -36,8 +36,8 @@ export function AnomalyVsNormalChart({ summary }: Props) {
         />
         <Tooltip contentStyle={{ fontSize: 12 }} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="Anomaly" fill={HEALTH_COLORS.red} />
-        <Bar dataKey="Normal" fill={HEALTH_COLORS.green} />
+        <Bar dataKey="Anomaly" fill={HEALTH_COLORS.red} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="Normal" fill={HEALTH_COLORS.green} radius={[4, 4, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   );
