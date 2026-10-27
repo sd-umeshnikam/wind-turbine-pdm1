@@ -118,6 +118,17 @@ def test_curate_writes_typed_parquet(tmp_path: Path):
     assert out.prediction_start == df["ts"][2]
 
 
+def test_curate_maps_unsuffixed_single_statistic_column_to_avg(tmp_path: Path):
+    # Farm A stores e.g. "Total active power" as a bare `sensor_50` column.
+    raw = _raw([7, 7, 7]).rename({"sensor_0_avg": "sensor_50"})
+    spec = SensorSpec(
+        "A", "sensor_50", "Total active power", "Wh", ("avg",), False, False, "condition", None, "power"
+    )
+    out = curate_event_file(raw, farm="A", event_id=1, turbine_id="A-1", sensors=[spec], out_dir=tmp_path)
+    assert "sensor_50_avg" in pl.read_parquet(out.path).columns
+    assert out.quality["sensor_50"].rows == 3
+
+
 def test_curate_rejects_file_with_several_turbines(tmp_path: Path):
     with pytest.raises(IngestError):
         curate_event_file(_raw([1, 2]), farm="A", event_id=1, turbine_id="A-1", sensors=[], out_dir=tmp_path)

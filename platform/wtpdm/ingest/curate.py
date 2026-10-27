@@ -64,12 +64,18 @@ def curate_event_file(
     for s in sensors:
         for stat in KEPT_STATS:
             col = f"{s.code}_{stat}"
+            source = col
             if col not in raw.columns:
-                continue
-            sensor_exprs.append(pl.col(col).cast(pl.Float32, strict=False))
+                # Single-statistic sensors (e.g. Farm A's 10-minute energy counters, incl.
+                # "Total active power") are stored without a suffix: that IS their average.
+                if stat == "avg" and s.code in raw.columns:
+                    source = s.code
+                else:
+                    continue
+            sensor_exprs.append(pl.col(source).cast(pl.Float32, strict=False).alias(col))
             if stat == "avg":
                 quality[s.code] = column_quality(
-                    raw[col].cast(pl.Float32, strict=False),
+                    raw[source].cast(pl.Float32, strict=False),
                     s.unit,
                     check_stuck=not (s.is_counter or s.is_angle),
                 )
