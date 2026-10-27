@@ -16,7 +16,9 @@ COPY wtpdm ./wtpdm
 COPY tests ./tests
 RUN pip install --no-deps .
 
-RUN useradd --create-home --uid 10001 app
+RUN useradd --create-home --uid 10001 app \
+    && mkdir -p /data/lake /mlartifacts && chown -R app:app /data /mlartifacts
+# Named volumes mounted here inherit this ownership on first use.
 USER app
 
 EXPOSE 8000

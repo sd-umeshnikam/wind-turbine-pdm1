@@ -1,0 +1,140 @@
+# Component -> sub-part taxonomy, matched against the dataset's sensor descriptions
+# (comma_feature_description.csv, all farms). Patterns are case-insensitive regexes and
+# are tried top to bottom: put specific patterns before general ones (e.g. "hydraulic
+# pressure rotor brake" must reach rotor_brake before the generic hydraulics rules).
+#
+# `conditions` are operating-condition signals: they are the INPUTS of the normal-
+# behaviour models (expected sensor value given load and weather), never health targets.
+# Every sensor that matches nothing is reported by the coverage check.
+
+components:
+  - code: gearbox
+    name: Gearbox
+    subcomponents:
+      - code: planetary_bearing
+        name: Planetary bearings
+        patterns: ["planetary bearing"]
+      - code: hss_bearing
+        name: Bearings (high-speed shaft)
+        patterns: ["gearbox bearing", "bearing on high speed shaft"]
+      - code: oil
+        name: Lubrication oil
+        patterns: ["gearbox oil", "oil in gearbox", "gear oil pump", "pollution indicator gearbox filter", "bypass valve gearbox"]
+  - code: generator
+    name: Generator
+    subcomponents:
+      - code: bearing
+        name: Bearings (DE / NDE)
+        patterns: ["generator bearing"]
+      - code: stator_winding
+        name: Stator windings
+        patterns: ["stator winding"]
+      - code: cooling
+        name: Cooling system
+        patterns: ["generator cooling", "generator cooler", "cooling water temp\\. generator", "generator temperature \\d cooling air", "cooling air exit", "flow meter stator cooler"]
+      - code: slip_ring
+        name: Slip ring
+        patterns: ["slip ring", "split ring"]
+  - code: rotor
+    name: Rotor & main bearing
+    subcomponents:
+      - code: main_bearing
+        name: Main (rotor) bearing
+        patterns: ["rotor bearing", "axial bearing"]
+      - code: hub
+        name: Hub & spinner
+        patterns: ["hub temperature", "hub controller", "nose cone", "spinner", "24 ?vdc hub"]
+  - code: pitch
+    name: Pitch system
+    subcomponents:
+      - code: drive
+        name: Pitch drives (per axis)
+        patterns: ["motor temperature axis", "axis ?\\d motor temperature", "motor current axis", "rpm motor axis", "temperature axis \\d", "axis \\d cooling element", "cooling element temperature", "line to line current axis", "direct current link volt axis", "position motor axis"]
+      - code: battery
+        name: Emergency batteries
+        patterns: ["battery"]
+  - code: rotor_brake
+    name: Rotor brake
+    subcomponents:
+      - code: caliper
+        name: Brake calipers
+        patterns: ["pressure rotor brake"]
+  - code: hydraulics
+    name: Hydraulic system
+    subcomponents:
+      - code: oil
+        name: Hydraulic oil
+        patterns: ["hydraulic oil", "oil in hydraulic group", "hydraulic tank"]
+      - code: pressure
+        name: Hydraulic pressure circuits
+        patterns: ["hydraulic pressure"]
+      - code: pump
+        name: Hydraulic pumps
+        patterns: ["hydraulic pump", "pollution indicator filter pump"]
+  - code: yaw
+    name: Yaw system
+    subcomponents:
+      - code: drive
+        name: Yaw drives
+        patterns: ["yaw motor"]
+  - code: transformer
+    name: Transformer
+    subcomponents:
+      - code: windings
+        name: Windings & core
+        patterns: ["transformer phase", "transformer l\\d", "transformator core", "transformer cell", "internal consumption transformer"]
+      - code: oil
+        name: Transformer oil & enclosure
+        patterns: ["main transformer", "eb transformer", "transformer container"]
+  - code: converter
+    name: Power converter
+    subcomponents:
+      - code: power_electronics
+        name: Power electronics (IGBT / inverter)
+        patterns: ["igbt", "choke coils", "vcp-board", "dc link voltage converter", "converter cabinet", "converter room"]
+      - code: cooling
+        name: Converter cooling water
+        patterns: ["vcs cooling water", "water cooler", "water pressure", "water conductivity", "water flow", "water temperature"]
+  - code: electrical
+    name: Electrical cabinets & auxiliaries
+    subcomponents:
+      - code: cabinets
+        name: Control & electrical cabinets
+        patterns: ["electrical cabinet", "control box", "board temperature", "top nacelle controller", "busbar", "platform tbc", "24 ?vdc", "power pack", "aeration", "pressure difference"]
+  - code: vibration
+    name: Structural vibration
+    subcomponents:
+      - code: drivetrain
+        name: Drive train
+        patterns: ["drive train vibration"]
+      - code: tower_nacelle
+        name: Tower & nacelle
+        patterns: ["tower vibration", "nacelle vibration", "tower natural frequency"]
+
+conditions:
+  # kind: patterns. The first sensor matching each kind (per farm) is used as an NBM input.
+  power: ["^total active power$", "^active power$", "^total positive active power$", "active power hv grid", "abb-ls active power"]
+  wind_speed: ["^wind speed$", "^wind speed 1\\+2$", "estimated windspeed", "^wind speed 1$", "wind speed anemometer"]
+  rotor_speed: ["^rotor speed$", "^rotor speed 1$", "generator angle speed", "gearbox rotational speed", "generator converter rotational"]
+  ambient_temp: ["^ambient temperature$", "^outside temperature$", "^nacelle outside temperature$"]
+  nacelle_temp: ["^nacelle temperature$"]
+  pitch_angle: ["^pitch angle$", "min pitch angle", "position rotor blade axis 1"]
+  reactive_power: ["^total reactive power$", "^reactive power$", "reactive power hv grid"]
+
+# Every farm must provide at least these condition kinds for NBM training.
+required_conditions: [power, wind_speed, ambient_temp]
+
+# Mapping from free-text event descriptions to the component whose fault it describes.
+# First match wins; unmatched events keep component = null ("unclassified").
+event_categories:
+  - {component: rotor_brake, patterns: ["rotor brake", "rotorbremse", "brake"]}
+  - {component: gearbox, patterns: ["gearbox", "gear box", "gear oil", "planetary"]}
+  - {component: generator, patterns: ["generator", "stator", "slip ring"]}
+  - {component: rotor, patterns: ["main bearing", "rotor ?bearing", "lager"]}
+  - {component: hydraulics, patterns: ["hydraulic"]}
+  - {component: pitch, patterns: ["pitch", "blade", "axis", "harting plug", "hub battery"]}
+  - {component: yaw, patterns: ["yaw", "azimuth"]}
+  - {component: transformer, patterns: ["transformer", "transformator"]}
+  - {component: converter, patterns: ["converter", "inverter", "umrichter", "igbt", "fuse filter", "water cooling"]}
+  - {component: electrical, patterns: ["plc", "communication", "wiring", "cabinet", "power supply", "own consumption"]}
+  - {component: vibration, patterns: ["vibration"]}

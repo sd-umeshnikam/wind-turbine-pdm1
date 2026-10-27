@@ -27,10 +27,16 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, REAL, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 JsonType = JSON().with_variant(JSONB(), "postgresql")
+
+
+def pg_enum(enum_cls: type[enum.Enum], name: str) -> Enum:
+    """Persist enum VALUES ("monitored"), not member names ("MONITORED"), so SQL and
+    other services can filter on the same strings the API returns."""
+    return Enum(enum_cls, name=name, values_callable=lambda e: [m.value for m in e])
 
 
 class Base(DeclarativeBase):
@@ -90,7 +96,7 @@ class Sensor(Base):
     statistics: Mapped[list[str]] = mapped_column(JsonType)  # ["average","min","max","std_dev"]
     is_angle: Mapped[bool] = mapped_column(Boolean, default=False)
     is_counter: Mapped[bool] = mapped_column(Boolean, default=False)
-    role: Mapped[SensorRole] = mapped_column(Enum(SensorRole, name="sensor_role"))
+    role: Mapped[SensorRole] = mapped_column(pg_enum(SensorRole, "sensor_role"))
     subcomponent_code: Mapped[str | None] = mapped_column(ForeignKey("subcomponent.code"))
     condition_kind: Mapped[str | None] = mapped_column(String(32))  # "power", "wind_speed", ...
 
@@ -112,7 +118,7 @@ class Event(Base):
     farm_id: Mapped[str] = mapped_column(ForeignKey("farm.id"))
     source_event_id: Mapped[int] = mapped_column(Integer)
     turbine_id: Mapped[str] = mapped_column(ForeignKey("turbine.id"))
-    label: Mapped[EventLabel] = mapped_column(Enum(EventLabel, name="event_label"))
+    label: Mapped[EventLabel] = mapped_column(pg_enum(EventLabel, "event_label"))
     description: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(32))
     component_code: Mapped[str | None] = mapped_column(ForeignKey("component.code"))
@@ -130,7 +136,7 @@ class Telemetry(Base):
     turbine_id: Mapped[str] = mapped_column(String(16), primary_key=True)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     sensor_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    value: Mapped[float] = mapped_column(Float(precision=24))
+    value: Mapped[float] = mapped_column(REAL)
 
 
 class HealthScore(Base):
@@ -166,9 +172,9 @@ class Alert(Base):
     turbine_id: Mapped[str] = mapped_column(ForeignKey("turbine.id"), index=True)
     component_code: Mapped[str] = mapped_column(ForeignKey("component.code"))
     subcomponent_code: Mapped[str | None] = mapped_column(ForeignKey("subcomponent.code"))
-    severity: Mapped[Severity] = mapped_column(Enum(Severity, name="severity"))
+    severity: Mapped[Severity] = mapped_column(pg_enum(Severity, "severity"))
     status: Mapped[AlertStatus] = mapped_column(
-        Enum(AlertStatus, name="alert_status"), default=AlertStatus.OPEN, index=True
+        pg_enum(AlertStatus, "alert_status"), default=AlertStatus.OPEN, index=True
     )
     title: Mapped[str] = mapped_column(String(200))
     message: Mapped[str] = mapped_column(Text)
@@ -231,7 +237,8 @@ class ModelDeployment(Base):
     version: Mapped[str] = mapped_column(String(16))
     alias: Mapped[str] = mapped_column(String(16))  # champion | challenger | retired
     farm_id: Mapped[str] = mapped_column(ForeignKey("farm.id"))
-    component_code: Mapped[str] = mapped_column(ForeignKey("component.code"))
+    # NULL = farm-level model (the health bundle covers every component of the farm)
+    component_code: Mapped[str | None] = mapped_column(ForeignKey("component.code"))
     validation: Mapped[str] = mapped_column(String(32))  # validated | unvalidated | failed_gate
     metrics: Mapped[dict | None] = mapped_column(JsonType)
     promoted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -276,7 +283,7 @@ class AppUser(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True)
     display_name: Mapped[str] = mapped_column(String(96))
     password_hash: Mapped[str] = mapped_column(String(128))
-    role: Mapped[Role] = mapped_column(Enum(Role, name="user_role"))
+    role: Mapped[Role] = mapped_column(pg_enum(Role, "user_role"))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
