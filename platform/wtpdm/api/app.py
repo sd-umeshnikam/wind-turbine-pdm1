@@ -22,7 +22,7 @@ from sqlalchemy import select, text
 
 from wtpdm import __version__, catalog
 from wtpdm.api import models_service
-from wtpdm.api.routers import alerts, auth, data, fleet, mlops, stream, turbines
+from wtpdm.api.routers import alerts, assistant, auth, data, fleet, mlops, stream, turbines
 from wtpdm.api.security import hash_password, jwt_secret
 from wtpdm.db.models import AppUser, AuditLog, Role
 from wtpdm.db.session import get_engine, session_scope
@@ -133,7 +133,7 @@ async def mlflow_unavailable(request: Request, exc: MlflowException):
     )
 
 
-for module in (auth, fleet, turbines, alerts, mlops, data, stream):
+for module in (auth, fleet, turbines, alerts, mlops, data, stream, assistant):
     app.include_router(module.router, prefix="/api")
 
 

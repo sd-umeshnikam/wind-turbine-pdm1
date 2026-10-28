@@ -5,6 +5,10 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { api, type Query } from "./client";
 import type {
   AlertDetail,
+  ChatContext,
+  ChatResponse,
+  Insights,
+  Recommendation,
   AlertPage,
   AlertSummary,
   AuditPage,
@@ -294,3 +298,44 @@ export function useUpdateUser() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["users"] }),
   });
 }
+
+// ---------------------------------------------------------------- assistant
+
+export const useAssistantStatus = () =>
+  useQuery({
+    queryKey: ["assistant", "status"],
+    queryFn: () => api.get<{ available: boolean; model: string | null }>("/assistant/status"),
+    staleTime: 60_000,
+  });
+
+export const useStarters = (context: ChatContext) =>
+  useQuery({
+    queryKey: ["assistant", "starters", context],
+    queryFn: () => api.get<{ suggestions: string[] }>("/assistant/suggestions", { ...context }),
+    staleTime: 60_000,
+  });
+
+export const useInsights = (since: string | null) =>
+  useQuery({
+    queryKey: ["assistant", "insights", since],
+    queryFn: () => api.get<Insights>("/assistant/insights", { since }),
+    refetchInterval: 60_000,
+  });
+
+export const useRecommendation = (params: { alert_id?: string; turbine_id?: string }, enabled = true) =>
+  useQuery({
+    queryKey: ["assistant", "recommendation", params],
+    queryFn: () => api.get<Recommendation>("/assistant/recommendations", params),
+    enabled,
+  });
+
+export const useChat = () =>
+  useMutation({
+    mutationFn: (body: { message: string; conversation_id?: string | null; context?: ChatContext }) =>
+      api.post<ChatResponse>("/assistant/chat", body),
+  });
+
+export const useFeedback = () =>
+  useMutation({
+    mutationFn: ({ id, rating }: { id: number; rating: 1 | -1 }) => api.post(`/assistant/messages/${id}/feedback`, { rating }),
+  });

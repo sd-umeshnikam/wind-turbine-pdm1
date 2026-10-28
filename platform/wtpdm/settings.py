@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_model: str = "openai/gpt-oss-120b"
+    # Follow-up suggestions are short; a smaller model keeps them off the main model's rate limit.
+    llm_suggestion_model: str = "openai/gpt-oss-20b"
 
 
 @lru_cache

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { useAlert, useAlertAction, useDirectory, type AlertAction } from "../../api/hooks";
 import type { AlertDetail, AuditEntry, Note } from "../../api/types";
+import { RecommendationView } from "../../assistant/RecommendationView";
 import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/Toasts";
 import { Drawer, ErrorState, Loading, SeverityBadge, StatusBadge } from "../../components/ui";
@@ -234,6 +235,12 @@ export function AlertDrawer({ id, onClose }: { id: string; onClose: () => void }
                 </tbody>
               </table>
               <p className="subtle">Sub-part attribution is a contributing signal, not a confirmed diagnosis.</p>
+            </div>
+          )}
+          {a.status !== "resolved" && (
+            <div>
+              <h3 style={{ marginBottom: 8 }}>Recommended maintenance</h3>
+              <RecommendationView alertId={a.id} />
             </div>
           )}
           <div>

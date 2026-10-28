@@ -19,7 +19,7 @@ evaluation, online scoring, drift/retraining, the Platform API and the assistant
 ```bash
 cd deploy/compose
 cp .env.example .env        # set passwords/secrets
-docker compose up -d --build   # db, mlflow, migrate, api, worker, retrainer
+docker compose up -d --build   # db, mlflow, migrate, api, worker, retrainer, web
 curl localhost:8000/api/ready
 ```
 
@@ -27,7 +27,8 @@ curl localhost:8000/api/ready
 |---|---|
 | Platform API | http://localhost:8000/api/docs |
 | MLflow | http://localhost:5001 |
-| PostgreSQL/TimescaleDB | localhost:5434 (db `wtpdm`; MLflow uses db `mlflow`) |
+| PostgreSQL/TimescaleDB | localhost:5434 (db `wtpdm`) |
+| Console | http://localhost:3000 |
 
 ## Checks
 
@@ -121,3 +122,30 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:8000/api/fleet | jq .kpis
 
 API integration tests (`tests/test_api.py`) run against the live database inside one
 transaction per test, which is rolled back, so test users and alerts never persist.
+
+## Maintenance assistant (P6)
+
+A tool-calling LLM (OpenAI-compatible; Groq `openai/gpt-oss-120b` by default) over the live
+platform, served under `/api/assistant` and shown as a panel in the console.
+
+| Capability | How |
+|---|---|
+| Grounded answers | 14 read-only tools (fleet, turbine health, health trend, sensor deviations, measured vs expected, alerts, alert details, recommendations, models, drift, retrain jobs, labelled events, knowledge search) run in the user's session. Figures in the answer that appear nowhere in the tool results are marked *unverified*. |
+| Retrieval (RAG) | BM25 over the platform guide (`assistant/knowledge/`), the maintenance playbook and each farm's champion model card from MLflow. |
+| Suggested follow-ups | The LLM proposes next questions, each validated (domain, length, guardrails); a rule-based set built from the entities in the answer fills in. Starter questions use real ids from the live state and the page on screen. |
+| Proactive insights | `GET /api/assistant/insights`: since the previous visit — new / escalated / re-occurred alerts, resolutions, the user's queue, model registry and retraining changes, drift, turbines below the watch level. Deterministic, from the audit log and live state. |
+| Maintenance recommendations | `GET /api/assistant/recommendations?alert_id=…`: the playbook entries (`assistant/playbook.yaml`, every taxonomy sub-part) of the sub-parts the alert implicates, with the live evidence, response window by severity, safety flags and citations. Advisory only. |
+| Guardrails | Prompt-injection and unsafe-operation refusal, off-topic filter, PII redaction before the provider, secret scrubbing, output length cap, 12 questions/min per user. |
+| Memory & feedback | Every turn is stored in `assistant_message` (tools, citations, flags, latency); users rate answers. |
+
+The key is read from `WTPDM_LLM_API_KEY` (git-ignored `.env`); without it the assistant
+reports itself unavailable instead of answering ungrounded.
+
+Evaluation against the live data and the real model (rolled back, leaves no rows):
+
+```sh
+docker compose -f ../deploy/compose/docker-compose.yml exec api python -m wtpdm.assistant.eval --show-answers
+```
+
+The eval set (`assistant/eval_set.yaml`) fills in real ids at run time and checks tool
+selection, entity mentions, grounding, follow-ups and guardrail verdicts.

@@ -1,0 +1,198 @@
+# Maintenance playbook: advisory guidance per sub-part (taxonomy code) and failure mode.
+# Recommendations combine an entry with the live alert (severity, drivers, condition state).
+# Guidance is generic wind-turbine O&M practice; site procedures, the OEM manual and the
+# responsible engineer's judgement take precedence. Never a substitute for LOTO/safety rules.
+version: 1
+
+# Response windows by alert severity (playbook defaults; adjust to the site's O&M policy).
+response:
+  critical: {window: "within 24 h", posture: "Plan an inspection now; follow the site procedure on curtailment or stop if the deviation keeps growing."}
+  high: {window: "within 72 h", posture: "Schedule an inspection on the next available crew slot; watch the trend daily."}
+  medium: {window: "within 2 weeks", posture: "Add to the next planned visit; review the trend weekly."}
+  low: {window: "next routine service", posture: "Monitor; no visit needed unless the trend worsens."}
+
+entries:
+  gearbox.planetary_bearing:
+    name: Gearbox planetary bearings
+    failure_modes:
+      - id: GBX-PB-1
+        mode: Planet bearing wear / spalling
+        signals: [planet bearing temperature rising above the expected value at the same load, higher temperature spread between planet bearings]
+        checks: [oil sample for wear metals and particle count, inspect the inline particle counter / magnetic plug, borescope the planetary stage at the next stop]
+        actions: [plan bearing or planet-stage repair if debris is confirmed, increase oil sampling frequency until repaired]
+  gearbox.hss_bearing:
+    name: Gearbox high-speed-shaft bearings
+    failure_modes:
+      - id: GBX-HSS-1
+        mode: High-speed-shaft bearing wear or lubrication starvation
+        signals: [HSS bearing temperature above expected for the operating point, temperature rising faster than oil temperature]
+        checks: [oil sample (wear metals, viscosity, water), check lubrication flow to the HSS bearing, vibration spectrum around HSS bearing defect frequencies if available, borescope the HSS bearing]
+        actions: [replace the HSS bearing up-tower if damage is confirmed (crane-free repair is usually possible), correct lubrication supply]
+  gearbox.oil:
+    name: Gearbox lubrication oil
+    failure_modes:
+      - id: GBX-OIL-1
+        mode: Lubrication degradation, low level or cooling problem
+        signals: [gearbox oil temperature above expected, oil pressure below normal, inlet-to-sump temperature difference changing]
+        checks: [oil level and visible leaks, oil cooler fan and thermostatic valve, oil and inline filter condition / differential pressure, oil sample]
+        actions: [top up or change oil, replace filters, repair cooler or leaks; re-baseline the trend afterwards]
+  generator.bearing:
+    name: Generator bearings (DE / NDE)
+    failure_modes:
+      - id: GEN-BRG-1
+        mode: Generator bearing wear, lubrication or electrical (current) erosion
+        signals: [drive-end or non-drive-end bearing temperature above expected, growing DE/NDE temperature difference]
+        checks: [grease condition and automatic lubrication system, shaft grounding brush and insulated bearing, vibration measurement, alignment of the generator coupling]
+        actions: [re-grease or repair the lubrication system, replace the grounding brush, plan bearing replacement if damage is confirmed]
+  generator.stator_winding:
+    name: Generator stator windings
+    failure_modes:
+      - id: GEN-STA-1
+        mode: Winding overheating or insulation degradation
+        signals: [stator winding temperature above expected for the load, imbalance between phase temperatures]
+        checks: [generator cooling (fans, filters, air or water circuit), insulation resistance / polarisation index test, phase current balance]
+        actions: [restore cooling, clean windings, plan rewind or generator exchange if insulation tests fail]
+  generator.cooling:
+    name: Generator cooling system
+    failure_modes:
+      - id: GEN-COOL-1
+        mode: Reduced cooling capacity
+        signals: [cooling air or water temperature above expected, generator temperatures rising together]
+        checks: [fans and motors, air filters, coolant level, pump and heat exchanger fouling]
+        actions: [clean or replace filters and heat exchanger, repair fans or pump, refill coolant]
+  generator.slip_ring:
+    name: Generator slip ring
+    failure_modes:
+      - id: GEN-SR-1
+        mode: Brush wear or slip-ring overheating
+        signals: [slip-ring temperature above expected]
+        checks: [brush length and spring pressure, carbon dust build-up, slip-ring surface condition, extraction filter]
+        actions: [replace brushes, clean the slip-ring compartment, resurface rings if scored]
+  rotor.main_bearing:
+    name: Main (rotor) bearing
+    failure_modes:
+      - id: ROT-MB-1
+        mode: Main bearing wear or lubrication failure
+        signals: [main bearing temperature above expected, drive-train vibration level increasing]
+        checks: [grease purge and lubrication system, grease sample, vibration spectrum, bearing seals]
+        actions: [repair lubrication, plan bearing repair or replacement (major component, crane planning lead time)]
+  rotor.hub:
+    name: Hub and spinner
+    failure_modes:
+      - id: ROT-HUB-1
+        mode: Hub controller / hub environment out of range
+        signals: [hub or hub-controller temperature above expected]
+        checks: [hub ventilation and heaters, hub controller cabinet, slip-ring connection to the hub]
+        actions: [repair ventilation or heating, replace failing hub electronics]
+  pitch.drive:
+    name: Pitch drives (per axis)
+    failure_modes:
+      - id: PIT-DRV-1
+        mode: Pitch motor, drive or gearbox degradation
+        signals: [pitch motor temperature or current above expected on one axis, asymmetry between blade axes]
+        checks: [pitch motor brake and encoder, converter / drive fault log, pitch gearbox oil and backlash, blade bearing friction]
+        actions: [replace the motor or drive of the affected axis, lubricate the blade bearing, re-test pitch run]
+  pitch.battery:
+    name: Pitch emergency batteries / capacitors
+    failure_modes:
+      - id: PIT-BAT-1
+        mode: Emergency supply degradation (safety-relevant)
+        signals: [battery or capacitor temperature / voltage out of the expected range]
+        checks: [battery or ultracapacitor test per OEM procedure, charger, cabinet temperature]
+        actions: [replace the battery pack or capacitor bank; the emergency feathering function must be proven before return to service]
+  rotor_brake.caliper:
+    name: Rotor brake calipers
+    failure_modes:
+      - id: BRK-CAL-1
+        mode: Brake pressure loss or pad wear (safety-relevant)
+        signals: [brake caliper pressure below normal, slower pressure build-up]
+        checks: [hydraulic pressure to the calipers, pad thickness and disc condition, accumulator pre-charge, leaks]
+        actions: [replace pads, repair leaks or accumulators; verify braking torque before return to service]
+  hydraulics.oil:
+    name: Hydraulic oil
+    failure_modes:
+      - id: HYD-OIL-1
+        mode: Hydraulic oil overheating, contamination or low level
+        signals: [hydraulic oil temperature above expected, low oil level]
+        checks: [oil level and leaks, oil sample (particles, water), cooler and filter condition]
+        actions: [repair leaks, change oil and filters, repair cooling]
+  hydraulics.pressure:
+    name: Hydraulic pressure circuits
+    failure_modes:
+      - id: HYD-PRS-1
+        mode: Pressure loss in a hydraulic circuit
+        signals: [system or circuit pressure below normal, pump running more often to hold pressure]
+        checks: [leaks at hoses, fittings and cylinders, accumulator pre-charge, pressure relief and proportional valves]
+        actions: [replace leaking components, recharge or replace accumulators]
+  hydraulics.pump:
+    name: Hydraulic pumps
+    failure_modes:
+      - id: HYD-PMP-1
+        mode: Pump wear
+        signals: [longer pump run times, pump motor temperature above expected]
+        checks: [pump delivery pressure and flow, motor current, inlet filter]
+        actions: [replace the pump or motor, clean the inlet filter]
+  yaw.drive:
+    name: Yaw drives
+    failure_modes:
+      - id: YAW-DRV-1
+        mode: Yaw motor or gearbox degradation
+        signals: [yaw motor temperature or current above expected, yaw misalignment events]
+        checks: [yaw motors and brakes, yaw gearbox oil, yaw ring lubrication and teeth, yaw brake pads]
+        actions: [replace the affected motor or gearbox, lubricate the yaw ring, adjust yaw brake]
+  transformer.windings:
+    name: Transformer windings and core
+    failure_modes:
+      - id: TRF-WND-1
+        mode: Winding overheating
+        signals: [winding (phase) temperature above expected for the load, imbalance between phases]
+        checks: [transformer cooling fans, enclosure ventilation, load and harmonic content, thermal imaging]
+        actions: [restore cooling, plan a transformer inspection by the electrical authority (high-voltage work)]
+  transformer.oil:
+    name: Transformer oil and enclosure
+    failure_modes:
+      - id: TRF-OIL-1
+        mode: Oil overheating or pressure build-up
+        signals: [transformer oil or enclosure temperature above expected, pressure relief events]
+        checks: [dissolved gas analysis (DGA) of the oil, oil level, pressure relief device, cooling]
+        actions: [act on DGA results with the electrical authority; repair cooling or seals]
+  converter.power_electronics:
+    name: Converter power electronics
+    failure_modes:
+      - id: CNV-PE-1
+        mode: Power module or choke overheating
+        signals: [IGBT, choke or converter cabinet temperature above expected]
+        checks: [converter cooling, cabinet filters, fan operation, fault log of the converter, thermal imaging of terminations]
+        actions: [restore cooling, replace failing modules or fans]
+  converter.cooling:
+    name: Converter cooling water
+    failure_modes:
+      - id: CNV-COOL-1
+        mode: Converter cooling circuit degradation
+        signals: [cooling water temperature above expected, water flow or pressure abnormal]
+        checks: [coolant level and pressure, pump, heat exchanger fouling, flow sensor]
+        actions: [refill or bleed the circuit, repair the pump, clean the heat exchanger]
+  electrical.cabinets:
+    name: Control and electrical cabinets
+    failure_modes:
+      - id: ELC-CAB-1
+        mode: Cabinet over-temperature or auxiliary supply problem
+        signals: [cabinet or controller temperature above expected]
+        checks: [cabinet fans, filters and heaters, auxiliary power supplies, terminal tightness]
+        actions: [repair ventilation or heating, replace failing supplies]
+  vibration.drivetrain:
+    name: Drive-train vibration
+    failure_modes:
+      - id: VIB-DT-1
+        mode: Rising drive-train vibration (bearing, gear or alignment)
+        signals: [drive-train acceleration above expected for the operating point]
+        checks: [vibration spectrum analysis (bearing and gear-mesh frequencies), alignment, bolted joints, oil sample]
+        actions: [act on the component the spectrum points to; tighten or realign as found]
+  vibration.tower_nacelle:
+    name: Tower and nacelle vibration
+    failure_modes:
+      - id: VIB-TWR-1
+        mode: Increased structural vibration (rotor imbalance or structural looseness)
+        signals: [tower or nacelle acceleration above expected]
+        checks: [rotor mass / aerodynamic imbalance (blade pitch angles), blade condition, tower and foundation bolts]
+        actions: [correct pitch angle deviations or blade damage, re-torque bolted joints]

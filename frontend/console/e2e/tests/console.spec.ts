@@ -184,3 +184,37 @@ test("dark mode renders the fleet", async ({ page }) => {
   expect(bg).toBe("rgb(13, 13, 13)");
   await page.screenshot({ path: `${SHOTS}/15-fleet-dark.png`, fullPage: true });
 });
+
+test("assistant answers from live data with sources and follow-ups", async ({ page }) => {
+  test.setTimeout(150_000);
+  const problems = watch(page);
+  await login(page);
+  await expect(page.getByText("What's new")).toBeVisible();
+  await page.getByRole("button", { name: "Assistant" }).click();
+  const panel = page.getByRole("complementary", { name: "Maintenance assistant" });
+  await expect(panel.locator(".suggestion").first()).toBeVisible();
+  await panel.getByLabel("Question").fill("Which turbines need attention first?");
+  await panel.getByRole("button", { name: "Send" }).click();
+  await expect(panel.getByLabel("Sources")).toBeVisible({ timeout: 120_000 });
+  await expect(panel.locator(".markdown").first()).not.toBeEmpty();
+  await expect(panel.locator(".suggestion").first()).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/16-assistant.png` });
+  expect(problems).toEqual([]);
+});
+
+test("alert drawer and turbine page show maintenance recommendations", async ({ page }) => {
+  const problems = watch(page);
+  await login(page);
+  await page.getByRole("link", { name: /Alerts/ }).click();
+  await page.locator("table.data tbody tr").first().click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("heading", { name: "Recommended maintenance" })).toBeVisible();
+  await expect(drawer.getByText(/Respond (within|next)/)).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/17-recommendation.png` });
+  await page.keyboard.press("Escape");
+  await page.goto("/turbines");
+  await page.locator("table.data tbody tr td a").first().click();
+  await expect(page.getByRole("heading", { name: "Maintenance outlook" })).toBeVisible();
+  await noErrorState(page);
+  expect(problems).toEqual([]);
+});

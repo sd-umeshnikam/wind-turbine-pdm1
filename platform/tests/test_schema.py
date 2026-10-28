@@ -15,6 +15,7 @@ EXPECTED_TABLES = {
     "alert",
     "alert_note",
     "audit_log",
+    "assistant_message",
     "replay_state",
     "model_deployment",
     "drift_report",

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAlert, useSnapshot } from "../../api/hooks";
+import { RecommendationView } from "../../assistant/RecommendationView";
 import type { ComponentHealth, TurbineDetail } from "../../api/types";
 import { Card, Empty, HealthBadge, HealthBar, QueryView } from "../../components/ui";
 import { dataTime, num, titleCase, withUnit } from "../../lib/format";
@@ -160,6 +161,9 @@ export function OverviewTab({
       <div className="stack">
         <Conditions turbineId={turbine.id} />
         {turbine.active_alert && <Drivers alertId={turbine.active_alert.id} />}
+        <Card title="Maintenance outlook" hint="advisory, from the playbook">
+          <RecommendationView turbineId={turbine.id} />
+        </Card>
       </div>
     </div>
   );

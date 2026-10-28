@@ -454,3 +454,76 @@ export interface AuditPage {
   total: number;
   items: AuditEntry[];
 }
+
+// ---------------------------------------------------------------- assistant
+
+export interface Citation {
+  kind: string;
+  label: string;
+  ref: string;
+  link: string | null;
+}
+
+export interface ChatResponse {
+  conversation_id: string;
+  message_id: number | null;
+  answer: string;
+  blocked: boolean;
+  reason: string | null;
+  flags: string[];
+  tools: { name: string; args: Record<string, unknown>; ok: boolean }[];
+  citations: Citation[];
+  suggestions: string[];
+  suggestion_source: string;
+  model: string | null;
+  latency_ms: number;
+}
+
+export interface ChatContext {
+  page?: string;
+  turbine_id?: string;
+  alert_id?: string;
+}
+
+export interface Insight {
+  kind: string;
+  tone: "critical" | "warning" | "good" | "info";
+  title: string;
+  detail: string;
+  link: string | null;
+}
+
+export interface Insights {
+  since: string;
+  first_visit: boolean;
+  generated_at: string;
+  items: Insight[];
+}
+
+export interface FailureMode {
+  id: string;
+  mode: string;
+  signals: string[];
+  checks: string[];
+  actions: string[];
+}
+
+export interface RecommendationItem {
+  subcomponent: string;
+  name: string;
+  safety_relevant: boolean;
+  evidence: { sensor?: string; description?: string; z?: number; health?: number; residual_z?: number | null }[];
+  failure_modes: FailureMode[];
+}
+
+export interface Recommendation {
+  scope: "alert" | "turbine";
+  alert_id: string | null;
+  turbine_id: string;
+  severity: Severity | null;
+  response: { window: string; posture: string } | null;
+  items: RecommendationItem[];
+  notes: string[];
+  disclaimer: string;
+  citations: string[];
+}

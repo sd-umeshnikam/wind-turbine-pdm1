@@ -301,3 +301,27 @@ class AppUser(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------- assistant
+
+
+class AssistantMessage(Base):
+    """One turn of an assistant conversation (user question or assistant answer), kept for
+    conversation memory, review of answers and user feedback."""
+
+    __tablename__ = "assistant_message"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    username: Mapped[str] = mapped_column(String(64), index=True)
+    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    content: Mapped[str] = mapped_column(Text)
+    context: Mapped[dict | None] = mapped_column(JsonType)  # page / turbine / alert on screen
+    tools: Mapped[list | None] = mapped_column(JsonType)  # tool calls made for this answer
+    citations: Mapped[list | None] = mapped_column(JsonType)
+    flags: Mapped[list | None] = mapped_column(JsonType)  # guardrail flags
+    model: Mapped[str | None] = mapped_column(String(96))
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    feedback: Mapped[int | None] = mapped_column(SmallInteger)  # +1 / -1
+    feedback_comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

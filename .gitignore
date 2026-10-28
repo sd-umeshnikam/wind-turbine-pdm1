@@ -57,3 +57,4 @@ __pycache__/
 frontend/console/e2e/results/
 frontend/console/e2e/node_modules/
 *.tsbuildinfo
+platform/.eval-report.json

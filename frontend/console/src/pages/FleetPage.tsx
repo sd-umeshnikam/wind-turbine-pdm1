@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAlerts, useFarms, useFleet } from "../api/hooks";
 import { useActivity } from "../api/stream";
 import type { AuditEntry, Fleet, TurbineSummary } from "../api/types";
+import { InsightsList } from "../assistant/Insights";
 import { Card, Empty, HealthBadge, Kpi, PageHead, QueryView, Segmented, SeverityBadge, StatusBadge } from "../components/ui";
 import { ago, dataTime, int, num, titleCase } from "../lib/format";
 import { BAND_LABEL, band } from "../lib/health";
@@ -290,6 +291,9 @@ export function FleetPage() {
           </QueryView>
         </Card>
         <div className="stack">
+          <Card title="What's new" hint="from the audit log and live state">
+            <InsightsList />
+          </Card>
           <Card title="Latest active alerts" flush tools={<Link to="/alerts">Work queue →</Link>}>
             <LatestAlerts />
           </Card>

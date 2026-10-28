@@ -18,6 +18,7 @@ import { useStreamState } from "../api/stream";
 import { useAuth } from "../auth/AuthContext";
 import { ago } from "../lib/format";
 import { useThemeChoice, type ThemeChoice } from "../lib/theme";
+import { AssistantLauncher, AssistantProvider } from "../assistant/Assistant";
 
 function Nav() {
   const { can } = useAuth();
@@ -114,11 +115,13 @@ function ThemeToggle() {
 export function Layout() {
   const { user, logout } = useAuth();
   return (
+    <AssistantProvider>
     <div className="shell">
       <Nav />
       <header className="topbar">
         <ReplayClock />
         <div className="spacer" />
+        <AssistantLauncher />
         <ThemeToggle />
         {user && (
           <div className="row" style={{ gap: 10 }}>
@@ -136,5 +139,6 @@ export function Layout() {
         <Outlet />
       </main>
     </div>
+    </AssistantProvider>
   );
 }
