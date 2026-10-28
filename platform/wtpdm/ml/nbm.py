@@ -152,3 +152,16 @@ def residual_z(tm: TargetModel, df: pd.DataFrame, conditions: list[str]) -> np.n
         std = np.array([tm.resid_std.get(t, tm.fallback_std) for t in turbines])
         out[ok] = (resid - mean) / std
     return out
+
+
+def expected_value(tm: TargetModel, df: pd.DataFrame, conditions: list[str]) -> np.ndarray:
+    """What a healthy turbine would read for `tm.target` under each row's conditions: the
+    model prediction plus the turbine's typical offset (NaN where inputs are missing)."""
+    out = np.full(len(df), np.nan)
+    x = df[conditions].to_numpy(np.float32)
+    ok = ~np.isnan(x).any(axis=1)
+    if ok.any():
+        turbines = df["turbine_id"].to_numpy()[ok]
+        mean = np.array([tm.resid_mean.get(t, tm.fallback_mean) for t in turbines])
+        out[ok] = tm.model.predict(x[ok]) + mean  # type: ignore[attr-defined]
+    return out

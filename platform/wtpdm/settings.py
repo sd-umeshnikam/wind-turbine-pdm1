@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://wtpdm:wtpdm@localhost:5434/wtpdm"
     mlflow_tracking_uri: str = "http://localhost:5001"
+    # Browser-facing MLflow UI (run links in the API); differs from the in-cluster URI.
+    mlflow_ui_url: str = "http://localhost:5001"
 
     # Raw CARE dataset (read-only) and the curated lake this platform writes.
     raw_data_root: Path = Path("/data/raw")
@@ -25,6 +27,8 @@ class Settings(BaseSettings):
     jwt_ttl_minutes: int = 480
     admin_username: str = "admin"
     admin_password: SecretStr = SecretStr("")
+    # Browser origins allowed to call the API cross-origin (the console is served same-origin).
+    cors_origins: list[str] = []
 
     # Replay of real SCADA history: simulated seconds advanced per wall-clock second.
     replay_speed: float = Field(default=60.0, gt=0)

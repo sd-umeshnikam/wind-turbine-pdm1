@@ -79,3 +79,45 @@ With `WTPDM_RETRAIN_AUTO_PROMOTE=false` it waits for approval:
 docker compose run --rm migrate python -m wtpdm.mlops.retrain enqueue --farm A --reason "sensor swap"
 docker compose run --rm migrate python -m wtpdm.mlops.retrain approve --farm A --version 3 --actor <name>
 ```
+
+## Platform API (P4)
+
+FastAPI at `/api`, OpenAPI/Swagger at `/api/docs`. Everything except `/api/health`,
+`/api/ready` and `/api/openapi.json` requires a bearer token.
+
+**Auth.** `POST /api/auth/token` (OAuth2 password form) returns a JWT (HS256, `WTPDM_JWT_SECRET`
+>= 32 chars, lifetime `WTPDM_JWT_TTL_MINUTES`). The API refuses to start without a strong
+secret. On first start it creates the admin from `WTPDM_ADMIN_USERNAME` /
+`WTPDM_ADMIN_PASSWORD` if no admin exists. The user row is re-read on every request, so a
+deactivation or role change applies at once.
+
+| Role | Can |
+|---|---|
+| viewer | read fleet, turbines, alerts, models, drift, data, the event stream |
+| engineer | + acknowledge / assign / resolve / annotate alerts, read the audit log |
+| admin | + manage users, request retrains, approve challengers |
+
+| Area | Endpoints |
+|---|---|
+| Fleet | `GET /farms`, `GET /fleet` (KPIs + every turbine at its replay cursor) |
+| Turbine | `GET /turbines/{id}` (component -> sub-part health tree with sensors), `/health` (trend), `/telemetry` (downsampled avg/min/max), `/expected` (actual vs champion NBM expectation + residual z), `/events` |
+| Alerts | `GET /alerts` (filters, search, paging), `/alerts/summary`, `/alerts/{id}` (notes + audit trail); `POST .../acknowledge`, `/assign`, `/resolve`, `/notes` |
+| Models | `GET /models` (registry versions, aliases, gate, metrics, MLflow link), `/models/deployments`, `/models/{farm}/versions/{v}/comparison` (detectors, NBM regressors, components, RUL), `/card`, `/models/{farm}/compare?a=&b=` (default champion vs challenger); `POST .../approve` |
+| Drift | `GET /drift` (latest per farm: ok / warning / drift), `/drift/history`, `/drift/policy` |
+| Retrain | `GET /retrain/jobs`, `/retrain/jobs/{id}`, `/retrain/schedule`; `POST /retrain/jobs` |
+| Data | `GET /data/sensors`, `/data/coverage`, `/data/quality`, `/data/events`, `/replay`, `/audit` |
+| Live | `GET /stream` (server-sent events: `fleet` every 10 s, one event per audit entry such as `alert`, `model`, `retrain`, plus `drift`). EventSource clients pass `?access_token=` |
+
+Time-series windows are anchored on each turbine's replay cursor (`from`/`to` optional,
+default the last 7 days of that turbine's data time) and never extend past it. Rows after
+the cursor are left over from the previous replay loop. Every state-changing call writes
+`audit_log`, and alert transitions lock the alert row, so a race with the alert engine
+returns 409 instead of losing an update.
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8000/api/auth/token -d "username=admin&password=$ADMIN_PASSWORD" | jq -r .access_token)
+curl -s -H "Authorization: Bearer $TOKEN" localhost:8000/api/fleet | jq .kpis
+```
+
+API integration tests (`tests/test_api.py`) run against the live database inside one
+transaction per test, which is rolled back, so test users and alerts never persist.

@@ -14,6 +14,8 @@ x-platform: &platform
     WTPDM_MLFLOW_TRACKING_URI: http://mlflow:5000
     WTPDM_RAW_DATA_ROOT: /data/raw
     WTPDM_LAKE_ROOT: /data/lake
+    WTPDM_REPLAY_SPEED: ${WTPDM_REPLAY_SPEED:-60}
+    WTPDM_MLFLOW_UI_URL: ${WTPDM_MLFLOW_UI_URL:-http://localhost:5001}
   volumes:
     - ${WTPDM_RAW_DATA_DIR:-D:/wind-turbine-scada-data-for-early-fault-detection}:/data/raw:ro
     - lake:/data/lake

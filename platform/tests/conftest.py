@@ -1,8 +1,13 @@
+import os
+
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
 from wtpdm.settings import get_settings
+
+# The API refuses weak secrets; tests sign their own tokens when none is configured.
+os.environ.setdefault("WTPDM_JWT_SECRET", "pytest-only-secret-" + "x" * 32)
 
 
 @pytest.fixture(scope="session")
