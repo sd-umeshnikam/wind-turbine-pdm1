@@ -84,6 +84,41 @@ services:
       timeout: 5s
       retries: 10
 
+  # Replay of real SCADA history -> online scoring -> alerts; drift checks; retrain schedule.
+  worker:
+    <<: *platform
+    command: ["python", "-m", "wtpdm.realtime.worker"]
+    environment:
+      WTPDM_DATABASE_URL: postgresql+psycopg://wtpdm:${WTPDM_DB_PASSWORD:-wtpdm}@db:5432/wtpdm
+      WTPDM_MLFLOW_TRACKING_URI: http://mlflow:5000
+      WTPDM_RAW_DATA_ROOT: /data/raw
+      WTPDM_LAKE_ROOT: /data/lake
+      WTPDM_REPLAY_SPEED: ${WTPDM_REPLAY_SPEED:-60}
+      WTPDM_DRIFT_INTERVAL_MINUTES: ${WTPDM_DRIFT_INTERVAL_MINUTES:-15}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /tmp/wtpdm-worker.heartbeat -mmin -2 | grep -q ."]
+      interval: 30s
+      timeout: 5s
+      retries: 4
+      start_period: 120s
+
+  # Executes queued retrain jobs (schedule, drift, manual) one at a time.
+  retrainer:
+    <<: *platform
+    command: ["python", "-m", "wtpdm.mlops.retrain", "run"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+
 volumes:
   dbdata:
   lake:

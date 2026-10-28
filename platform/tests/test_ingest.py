@@ -132,3 +132,24 @@ def test_curate_maps_unsuffixed_single_statistic_column_to_avg(tmp_path: Path):
 def test_curate_rejects_file_with_several_turbines(tmp_path: Path):
     with pytest.raises(IngestError):
         curate_event_file(_raw([1, 2]), farm="A", event_id=1, turbine_id="A-1", sensors=[], out_dir=tmp_path)
+
+
+def test_metadata_is_read_as_utf8(tmp_path: Path):
+    """The CARE metadata is UTF-8 (German event text) and stores the lost degree sign as
+    U+FFFD; reading it as Latin-1 garbled both."""
+    from wtpdm.ingest.source import read_event_specs, read_sensor_specs
+
+    farm = tmp_path / "Wind Farm C"
+    farm.mkdir()
+    (farm / "comma_feature_description.csv").write_bytes(
+        "sensor_name,statistics_type,description,unit,is_angle,is_counter\n"
+        "sensor_0,average,Ambient temperature,\ufffdC,False,False\n"
+        "sensor_1,average,Pitch angle,\ufffd,True,False\n".encode()
+    )
+    (farm / "comma_event_info.csv").write_bytes(
+        "event_id,event_label,event_start,event_start_id,event_end,event_end_id,event_description\n"
+        "1,anomaly,2018-10-29 11:30:00,1,2018-11-15 15:30:00,2,Getriebe\u00f6l K\u00fchlung\n".encode()
+    )
+    units = [s.unit for s in read_sensor_specs(tmp_path, "C", T)]
+    assert units == ["°C", "°"]
+    assert read_event_specs(tmp_path, "C", T)[0].description == "Getriebeöl Kühlung"

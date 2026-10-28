@@ -1,6 +1,6 @@
 """Readers for the raw CARE dataset layout:
 
-    Wind Farm <X>/comma_feature_description.csv   sensor catalog (Latin-1)
+    Wind Farm <X>/comma_feature_description.csv   sensor catalog (UTF-8)
     Wind Farm <X>/comma_event_info.csv            labelled event windows (no turbine column)
     Wind Farm <X>/datasets/comma_<event_id>.csv   one turbine's history for that event
 
@@ -59,13 +59,14 @@ def _clean_unit(unit: str) -> str | None:
     unit = unit.strip()
     if not unit:
         return None
-    # The source is Latin-1; normalise the degree sign variants.
+    # The source files are UTF-8 but lost the degree sign upstream: it is stored as the
+    # replacement character U+FFFD ("�C", and a bare "�" for angles).
     return unit.replace("�", "°")
 
 
 def read_sensor_specs(raw_root: Path, farm: str, taxonomy: Taxonomy) -> list[SensorSpec]:
     path = farm_dir(raw_root, farm) / "comma_feature_description.csv"
-    with path.open(encoding="latin-1", newline="") as fh:
+    with path.open(encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
     specs = []
     for r in rows:
@@ -116,7 +117,7 @@ def _parse_ts(value: str) -> datetime:
 
 def read_event_specs(raw_root: Path, farm: str, taxonomy: Taxonomy) -> list[EventSpec]:
     path = farm_dir(raw_root, farm) / "comma_event_info.csv"
-    with path.open(encoding="latin-1", newline="") as fh:
+    with path.open(encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
     events = []
     for r in rows:

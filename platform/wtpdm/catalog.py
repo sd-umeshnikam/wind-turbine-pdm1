@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -12,6 +13,14 @@ from wtpdm.ingest.source import FARMS
 
 def catalog_dir(lake_root: Path, farm: str) -> Path:
     return lake_root / "catalog" / f"farm={farm}"
+
+
+def data_version(lake_root: Path, farm: str) -> str:
+    """Fingerprint of the farm catalog: changes whenever the lake is re-ingested differently."""
+    h = hashlib.sha256()
+    for name in ("events.parquet", "sensors.parquet", "conditions.json"):
+        h.update((catalog_dir(lake_root, farm) / name).read_bytes())
+    return h.hexdigest()[:12]
 
 
 def available_farms(lake_root: Path) -> list[str]:

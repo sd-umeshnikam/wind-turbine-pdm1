@@ -20,6 +20,16 @@ def health_from_score(score: np.ndarray | pd.Series) -> np.ndarray:
     return np.clip(100.0 * np.exp(-np.maximum(0.0, s - 1.0) / HEALTH_DECAY), 0.0, 100.0)
 
 
+def calibrated_health(score: np.ndarray | pd.Series, normal_median: float, alarm_level: float) -> np.ndarray:
+    """Health on the scale of the model's own normal operation: 100 at or below the median
+    normal score, 50 at `alarm_level` (as unusual as the worst 0.5% of normal operation),
+    halving again with every further step of the same size. Comparable across farms and
+    sub-parts whose raw scores live on very different scales."""
+    s = np.asarray(score, dtype=np.float64)
+    step = max(alarm_level - normal_median, 1e-6)
+    return np.clip(100.0 * np.exp2(-np.maximum(0.0, s - normal_median) / step), 0.0, 100.0)
+
+
 def subpart_scores(z: pd.DataFrame, targets: dict[str, list[str]], series_key: pd.Series) -> pd.DataFrame:
     """z: residual z per target column (rows in time order within each series).
     Returns one smoothed RMS-z column per sub-part."""

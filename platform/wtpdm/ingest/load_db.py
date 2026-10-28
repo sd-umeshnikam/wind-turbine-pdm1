@@ -77,24 +77,32 @@ def load_catalog(lake_root: Path, taxonomy: Taxonomy, farms: list[str]) -> dict[
                 ],
                 ["id"],
             )
-            # Sensors and events are owned by ingest: replace them for this farm.
-            s.execute(delete(Event).where(Event.farm_id == farm))
-            s.execute(delete(Sensor).where(Sensor.farm_id == farm))
-            s.add_all(
-                Sensor(
-                    farm_id=farm,
-                    code=r["code"],
-                    description=r["description"],
-                    unit=r["unit"],
-                    statistics=list(r["statistics"]),
-                    is_angle=r["is_angle"],
-                    is_counter=r["is_counter"],
-                    role=SensorRole(r["role"]),
-                    subcomponent_code=r["subcomponent_code"],
-                    condition_kind=r["condition_kind"],
-                )
-                for r in sensors.iter_rows(named=True)
+            # Sensors are upserted, never re-created: telemetry references sensor.id, so the id
+            # of a sensor must survive a re-ingest. Events are owned by ingest and replaced.
+            _upsert(
+                s,
+                Sensor,
+                [
+                    {
+                        "farm_id": farm,
+                        "code": r["code"],
+                        "description": r["description"],
+                        "unit": r["unit"],
+                        "statistics": list(r["statistics"]),
+                        "is_angle": r["is_angle"],
+                        "is_counter": r["is_counter"],
+                        "role": SensorRole(r["role"]),
+                        "subcomponent_code": r["subcomponent_code"],
+                        "condition_kind": r["condition_kind"],
+                    }
+                    for r in sensors.iter_rows(named=True)
+                ],
+                ["farm_id", "code"],
             )
+            s.execute(
+                delete(Sensor).where(Sensor.farm_id == farm, Sensor.code.not_in(sensors["code"].to_list()))
+            )
+            s.execute(delete(Event).where(Event.farm_id == farm))
             s.add_all(
                 Event(
                     farm_id=farm,

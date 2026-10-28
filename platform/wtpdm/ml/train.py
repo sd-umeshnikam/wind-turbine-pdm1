@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
 import json
 import tempfile
 from dataclasses import asdict
@@ -49,17 +48,13 @@ EXPERIMENT = "wtpdm-health"
 SUPERVISED_TRAIN_SAMPLE = 0.2
 # Promotion gate vs the threshold baseline: no meaningful increase in false alarms.
 MAX_FALSE_ALARM_INCREASE_DAYS = 2.0
+# A challenger replaces the champion only if it is better by at least this much (care score);
+# retraining on unchanged data must not churn model versions.
+MIN_IMPROVEMENT = 0.005
 
 
 def model_name(farm: str) -> str:
     return f"wtpdm-health-{farm}"
-
-
-def data_version(lake_root: Path, farm: str) -> str:
-    h = hashlib.sha256()
-    for name in ("events.parquet", "sensors.parquet", "conditions.json"):
-        h.update((catalog.catalog_dir(lake_root, farm) / name).read_bytes())
-    return h.hexdigest()[:12]
 
 
 # ------------------------------------------------------------------ stages
@@ -235,8 +230,11 @@ def register_and_gate(run_id: str, farm: str, selected: Metrics, baseline: Metri
     ):
         reasons.append("more false alarms than the baseline detector")
     champion = _champion_score(client, name)
-    if champion is not None and selected.care_style_score < champion:
-        reasons.append(f"care_style_score {selected.care_style_score} below champion {champion}")
+    if champion is not None and selected.care_style_score < champion + MIN_IMPROVEMENT:
+        reasons.append(
+            f"care_style_score {selected.care_style_score} does not improve on champion {champion}"
+            f" by >= {MIN_IMPROVEMENT}"
+        )
     promoted = promote and not reasons
     if promoted:
         client.set_registered_model_alias(name, "champion", mv.version)
@@ -256,10 +254,11 @@ def record_deployment(farm: str, registry: dict, metrics: Metrics, actor: str, t
     from wtpdm.db.session import session_scope
 
     with session_scope() as s:
-        if registry["promoted"]:
-            s.query(ModelDeployment).filter(
-                ModelDeployment.farm_id == farm, ModelDeployment.alias == "champion"
-            ).update({"alias": "retired"})
+        # The registry alias moves, so the rows it moved away from are retired.
+        moved = ["champion", "challenger"] if registry["promoted"] else ["challenger"]
+        s.query(ModelDeployment).filter(
+            ModelDeployment.farm_id == farm, ModelDeployment.alias.in_(moved)
+        ).update({"alias": "retired"})
         s.add(
             ModelDeployment(
                 model_name=registry["model"],
@@ -277,7 +276,11 @@ def record_deployment(farm: str, registry: dict, metrics: Metrics, actor: str, t
                 action="model.promote" if registry["promoted"] else "model.register",
                 entity="model",
                 entity_id=f"{registry['model']}/{registry['version']}",
-                details={**registry, "trigger": trigger},
+                details={
+                    **registry,
+                    "trigger": trigger,
+                    "awaiting_approval": not registry["promoted"] and not registry["gate_reasons"],
+                },
             )
         )
 
@@ -297,7 +300,7 @@ def train_farm(farm: str, trigger: str = "manual", actor: str = "system:train", 
         .sort(["event_id", "ts"])
         .to_pandas(use_pyarrow_extension_array=False)
     )
-    version = data_version(settings.lake_root, farm)
+    version = catalog.data_version(settings.lake_root, farm)
     train_rows = frame[frame["train_ok"]]
     fit_df, val_df = time_holdout(train_rows)
     val_mask = frame.index.isin(val_df.index)

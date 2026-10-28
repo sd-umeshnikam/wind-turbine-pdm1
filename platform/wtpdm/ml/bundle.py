@@ -62,7 +62,8 @@ class HealthBundle:
                 "turbine_health": health_from_score(turbine),
                 "detector_score": det_score,
                 "alarm": alarm,
-                "worst_subcomponent": subs.idxmax(axis=1, skipna=True),
+                # NaN while no sub-part has a score yet (smoothing warm-up)
+                "worst_subcomponent": subs.fillna(-np.inf).idxmax(axis=1).where(subs.notna().any(axis=1)),
             }
         )
         return {

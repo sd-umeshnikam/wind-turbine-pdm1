@@ -22,10 +22,12 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
     func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB, REAL, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -151,6 +153,7 @@ class HealthScore(Base):
     anomaly_score: Mapped[float | None] = mapped_column(Float)
     fault_probability: Mapped[float | None] = mapped_column(Float)
     model_version: Mapped[str | None] = mapped_column(String(64))
+    alarm: Mapped[bool | None] = mapped_column(Boolean)  # turbine-level row only
 
 
 class AlertStatus(enum.StrEnum):
@@ -189,6 +192,10 @@ class Alert(Base):
     acknowledged_by: Mapped[str | None] = mapped_column(String(64))
     resolved_by: Mapped[str | None] = mapped_column(String(64))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Return-to-normal does not close an alert: the engineer resolves it.
+    condition_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_data_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # last breach seen
     notes: Mapped[list[AlertNote]] = relationship(back_populates="alert", order_by="AlertNote.created_at")
 
 
@@ -220,6 +227,11 @@ class ReplayState(Base):
     turbine_id: Mapped[str] = mapped_column(ForeignKey("turbine.id"), primary_key=True)
     cursor_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(16), default="idle")
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cycle: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    source_event_id: Mapped[int | None] = mapped_column(Integer)  # CARE event of the current row
+    operating_status: Mapped[int | None] = mapped_column(SmallInteger)  # 0 normal .. 5 other
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -262,7 +274,9 @@ class RetrainJob(Base):
     __tablename__ = "retrain_job"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     trigger: Mapped[str] = mapped_column(String(16))  # schedule | drift | manual
-    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued|running|succeeded|failed
+    status: Mapped[str] = mapped_column(
+        String(16), default="queued", index=True
+    )  # queued|running|succeeded|failed
     requested_by: Mapped[str] = mapped_column(String(64))
     scope: Mapped[dict | None] = mapped_column(JsonType)  # {"farm": "C", "component": "pitch"}
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
