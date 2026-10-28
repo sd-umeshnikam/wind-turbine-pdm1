@@ -121,6 +121,18 @@ services:
       mlflow:
         condition: service_healthy
 
+  # Enterprise console (React, served by nginx, /api proxied same-origin).
+  web:
+    image: wtpdm/console:dev
+    build:
+      context: ../../frontend/console
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WTPDM_WEB_PORT:-3000}:8080"
+
 volumes:
   dbdata:
   lake:

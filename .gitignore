@@ -54,3 +54,6 @@ platform/.ruff_cache/
 platform/.mypy_cache/
 platform/.pytest_cache/
 __pycache__/
+frontend/console/e2e/results/
+frontend/console/e2e/node_modules/
+*.tsbuildinfo

@@ -220,6 +220,25 @@ class ExpectedOut(Schema):
     points: list[ExpectedPoint]
 
 
+class ConditionReading(Schema):
+    code: str
+    description: str
+    unit: str | None
+    kind: str  # condition kind: power, wind_speed, rotor_speed, pitch_angle, ambient_temp, ...
+    value: float | None
+    ts: datetime | None
+
+
+class SnapshotOut(Schema):
+    """Operating conditions at the replay cursor (drives the digital twin)."""
+
+    turbine_id: str
+    cursor_ts: datetime | None
+    operating_status: int | None
+    operating_status_label: str | None
+    readings: list[ConditionReading]
+
+
 class EventOut(ORM):
     id: int
     farm_id: str

@@ -4,6 +4,7 @@ actual (normal-behaviour model), CARE events."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -50,6 +51,18 @@ RAW_TELEMETRY = text(
       AND t.ts > :start AND t.ts <= :end
     """
 )
+
+
+LATEST_READINGS = text(
+    """
+    SELECT DISTINCT ON (sensor_id) sensor_id, ts, value
+    FROM telemetry
+    WHERE turbine_id = :turbine AND sensor_id = ANY(:ids) AND ts <= :cursor
+      AND ts > :cursor - make_interval(hours => :hours)
+    ORDER BY sensor_id, ts DESC
+    """
+)
+SNAPSHOT_FRESH_HOURS = 2
 
 
 def _turbine(s: Session, turbine_id: str) -> Turbine:
@@ -322,6 +335,52 @@ def expected_vs_actual(
         nbm_candidate=tm.candidate,
         window=_window_out(w),
         points=points_out,
+    )
+
+
+@router.get("/{turbine_id}/snapshot", response_model=schemas.SnapshotOut)
+def snapshot(turbine_id: str, _: Principal = Depends(viewer), s: Session = Depends(db)):
+    """Latest replayed reading of every operating-condition sensor (power, wind speed, rotor
+    speed, pitch angle, temperatures) at the cursor. A sensor without a reading in the last
+    two data hours is returned with `value: null`, never a carried-forward value."""
+    turbine = _turbine(s, turbine_id)
+    state = s.get(ReplayState, turbine_id)
+    sensors = s.scalars(
+        select(Sensor)
+        .where(Sensor.farm_id == turbine.farm_id, Sensor.condition_kind.is_not(None))
+        .order_by(Sensor.condition_kind, Sensor.id)
+    ).all()
+    latest: dict[int, Any] = {}
+    if state is not None and state.cursor_ts is not None and sensors:
+        latest = {
+            r["sensor_id"]: r
+            for r in s.execute(
+                LATEST_READINGS,
+                {
+                    "turbine": turbine_id,
+                    "ids": [x.id for x in sensors],
+                    "cursor": state.cursor_ts,
+                    "hours": SNAPSHOT_FRESH_HOURS,
+                },
+            ).mappings()
+        }
+    replay = live.replay_out(state)
+    return schemas.SnapshotOut(
+        turbine_id=turbine_id,
+        cursor_ts=replay.cursor_ts if replay else None,
+        operating_status=replay.operating_status if replay else None,
+        operating_status_label=replay.operating_status_label if replay else None,
+        readings=[
+            schemas.ConditionReading(
+                code=x.code,
+                description=x.description,
+                unit=x.unit,
+                kind=x.condition_kind or "",
+                value=_round(latest[x.id]["value"]) if x.id in latest else None,
+                ts=latest[x.id]["ts"] if x.id in latest else None,
+            )
+            for x in sensors
+        ],
     )
 
 

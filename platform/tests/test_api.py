@@ -169,6 +169,16 @@ def test_expected_vs_actual_uses_the_champion_nbm(client):
     pytest.fail("no sensor of a scored sub-part has an expected-value model")
 
 
+def test_snapshot_reports_operating_conditions_at_the_cursor(client):
+    t = _reporting_turbine(client)
+    snap = client.get(f"/api/turbines/{t['id']}/snapshot", headers=VIEWER).json()
+    kinds = {r["kind"] for r in snap["readings"]}
+    assert {"power", "wind_speed"} <= kinds  # every farm trains its NBMs on these
+    assert any(r["value"] is not None for r in snap["readings"] if r["kind"] == "power")
+    for r in snap["readings"]:
+        assert r["ts"] is None or r["ts"] <= snap["cursor_ts"]
+
+
 def test_unknown_inputs_are_rejected(client):
     assert client.get("/api/turbines/Z-99", headers=VIEWER).status_code == 404
     t = _reporting_turbine(client)
