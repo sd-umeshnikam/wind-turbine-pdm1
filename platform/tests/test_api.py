@@ -298,3 +298,18 @@ def test_openapi_documents_every_area(client):
     paths = client.get("/api/openapi.json").json()["paths"]
     for prefix in ("/api/fleet", "/api/turbines", "/api/alerts", "/api/models", "/api/drift", "/api/retrain"):
         assert any(p.startswith(prefix) for p in paths), prefix
+
+
+def test_repeated_failed_logins_lock_the_account(client):
+    from wtpdm.api.routers.auth import throttle
+
+    try:
+        for _ in range(throttle.MAX_FAILURES):
+            bad = client.post("/api/auth/token", data={"username": "pytest-admin", "password": "wrong-guess"})
+            assert bad.status_code == 401
+        locked = client.post("/api/auth/token", data={"username": "pytest-admin", "password": PASSWORD})
+        assert locked.status_code == 429 and int(locked.headers["retry-after"]) > 0
+    finally:
+        throttle.succeeded("pytest-admin")
+    ok = client.post("/api/auth/token", data={"username": "pytest-admin", "password": PASSWORD})
+    assert ok.status_code == 200

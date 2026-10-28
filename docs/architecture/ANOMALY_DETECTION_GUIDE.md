@@ -1,5 +1,7 @@
 # Anomaly Detection Guide — What Gets Flagged, and Why
 
+> **Superseded (v1).** This describes the retired v1 architecture. The current platform is described in [ADR-0005](/docs/adr/0005-platform-v2.md) and the [README](/README.md).
+
 This doc answers the question a maintenance engineer or reviewer asks first: **"why did the
 platform say this component is failing?"** It covers the general detection mechanism once
 (§1), then the physical reasoning and real evidence behind each of the seven target components

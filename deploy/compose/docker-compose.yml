@@ -34,7 +34,7 @@ services:
       - dbdata:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"  # host-only: never expose the database
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wtpdm -d wtpdm"]
       interval: 5s
@@ -42,22 +42,24 @@ services:
       retries: 20
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.17.2
+    image: ghcr.io/mlflow/mlflow:v2.22.4
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    # Registry + tracking metadata in Postgres (database `mlflow`), artifacts on a volume
-    # served through the tracking server so clients never need the path.
-    command: >
-      sh -c "pip install --quiet psycopg2-binary==2.9.10 &&
-             mlflow server --host 0.0.0.0 --port 5000
-             --backend-store-uri postgresql://wtpdm:${WTPDM_DB_PASSWORD:-wtpdm}@db:5432/mlflow
-             --artifacts-destination /mlartifacts --serve-artifacts"
+    # Tracking + registry metadata in a file store on the `mlruns` volume, artifacts on the
+    # `mlartifacts` volume served through the tracking server (clients never need the path).
+    # Exec form: every flag reaches the server (a folded shell string once dropped them).
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=file:///mlruns
+      - --artifacts-destination=/mlartifacts
+      - --serve-artifacts
     volumes:
+      - mlruns:/mlruns
       - mlartifacts:/mlartifacts
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5001:5000"  # host-only: MLflow has no authentication
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:5000/health')\""]
       interval: 10s
@@ -79,7 +81,7 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # host-only: clients go through `web`, which proxies /api
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8000/api/ready || exit 1"]
       interval: 10s
@@ -133,7 +135,20 @@ services:
     ports:
       - "${WTPDM_WEB_PORT:-3000}:8080"
 
+  # Optional public link (opt-in: `docker compose --profile public up -d tunnel`). A
+  # Cloudflare quick tunnel to the console; the URL appears in `docker compose logs tunnel`.
+  # Only `web` is published: the API is reached through it, MLflow and the database never.
+  tunnel:
+    image: cloudflare/cloudflared:2024.12.2
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    command: ["tunnel", "--no-autoupdate", "--url", "http://web:8080"]
+
 volumes:
   dbdata:
+  mlruns:
   lake:
   mlartifacts:

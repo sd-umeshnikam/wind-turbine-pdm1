@@ -10,7 +10,8 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 # Install dependencies first (cached layer), then the package itself.
-RUN mkdir wtpdm && touch wtpdm/__init__.py && pip install ".[dev]" && rm -rf wtpdm
+RUN pip install --upgrade pip==26.2 setuptools==83.0.0 \
+    && mkdir wtpdm && touch wtpdm/__init__.py && pip install ".[dev]" && rm -rf wtpdm
 
 COPY wtpdm ./wtpdm
 COPY tests ./tests

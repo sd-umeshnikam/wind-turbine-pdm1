@@ -3,6 +3,8 @@ replay position and the active alert. Shared by the fleet/turbine routers and th
 
 from __future__ import annotations
 
+import threading
+import time
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -18,6 +20,7 @@ ACTIVE = (AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED)
 # A sub-part whose latest score is older than this at the cursor is shown as "no data"
 # (e.g. its sensors were missing) rather than with a stale value.
 FRESH_HOURS = 6
+FLEET_HEALTH_TTL = 5.0  # seconds; below the replay tick (10 s)
 
 LATEST_HEALTH = text(
     """
@@ -105,12 +108,27 @@ def summary(
     )
 
 
+_fleet_health: tuple[float, dict[str, dict[str, dict]]] | None = None
+_fleet_health_lock = threading.Lock()
+
+
+def fleet_health(s: Session) -> dict[str, dict[str, dict]]:
+    """latest_health() of every turbine, shared for FLEET_HEALTH_TTL seconds. Scores change
+    once per replay tick, while every open console and live stream asks for them; alerts
+    and replay positions are still read fresh by the callers."""
+    global _fleet_health
+    with _fleet_health_lock:
+        if _fleet_health is None or time.monotonic() - _fleet_health[0] > FLEET_HEALTH_TTL:
+            _fleet_health = (time.monotonic(), latest_health(s))
+        return _fleet_health[1]
+
+
 def fleet(s: Session, farm: str | None = None) -> list[schemas.TurbineSummary]:
     q = select(Turbine).order_by(Turbine.farm_id, Turbine.asset_id)
     if farm:
         q = q.where(Turbine.farm_id == farm)
     turbines = s.scalars(q).all()
-    health = latest_health(s)
+    health = fleet_health(s)
     states = {r.turbine_id: r for r in s.scalars(select(ReplayState))}
     alerts = active_alerts(s)
     return [summary(t, health.get(t.id, {}), states.get(t.id), alerts.get(t.id)) for t in turbines]

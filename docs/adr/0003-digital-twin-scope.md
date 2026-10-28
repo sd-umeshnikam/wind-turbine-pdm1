@@ -1,7 +1,7 @@
 # ADR-0003: Digital Twin Scope
 
 ## Status
-Accepted
+Superseded by [ADR-0005](0005-platform-v2.md)
 
 ## Context
 "Digital twin" is an overloaded term ranging from a live-data dashboard with a 3D model to a full physics/CFD simulation that mirrors structural and aerodynamic behavior. This platform needs a concrete, buildable scope, stated up front so expectations match what's actually delivered.

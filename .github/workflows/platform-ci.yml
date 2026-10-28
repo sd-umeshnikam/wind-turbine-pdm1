@@ -33,7 +33,10 @@ jobs:
       - run: ruff check wtpdm tests && ruff format --check wtpdm tests
       - run: mypy wtpdm
       - run: alembic -c wtpdm/db/alembic.ini upgrade head
-      - run: pytest -q --cov=wtpdm --cov-report=term-missing
+      # Unit, contract and schema tests. The API / assistant integration tests need the
+      # replayed data and models of a running stack: run them there (docs/RUNBOOK.md).
+      - run: pytest -q --cov=wtpdm --cov-report=term-missing -m "not integration"
+      - run: pytest -q tests/test_schema.py
       - name: migration downgrade/upgrade roundtrip
         run: alembic -c wtpdm/db/alembic.ini downgrade base && alembic -c wtpdm/db/alembic.ini upgrade head
 

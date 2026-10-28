@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import threading
+from collections import defaultdict, deque
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -25,20 +27,70 @@ from wtpdm.db.models import AppUser, Role
 router = APIRouter(tags=["auth"])
 
 
+class LoginThrottle:
+    """Account lockout against password guessing: after MAX_FAILURES failed logins for a
+    username within WINDOW, further attempts are refused (429) until the window passes.
+    In-process state: one API replica; a multi-replica deployment moves it to a shared store."""
+
+    MAX_FAILURES = 5
+    WINDOW = timedelta(minutes=15)
+
+    def __init__(self) -> None:
+        self._failures: dict[str, deque[datetime]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def _recent(self, key: str, now: datetime) -> deque[datetime]:
+        q = self._failures[key]
+        while q and now - q[0] > self.WINDOW:
+            q.popleft()
+        return q
+
+    def retry_after(self, key: str) -> int | None:
+        now = datetime.now(UTC)
+        with self._lock:
+            q = self._recent(key, now)
+            if len(q) < self.MAX_FAILURES:
+                return None
+            return max(1, int((q[0] + self.WINDOW - now).total_seconds()))
+
+    def failed(self, key: str) -> None:
+        with self._lock:
+            self._recent(key, datetime.now(UTC)).append(datetime.now(UTC))
+
+    def succeeded(self, key: str) -> None:
+        with self._lock:
+            self._failures.pop(key, None)
+
+
+throttle = LoginThrottle()
+
+
 @router.post("/auth/token", response_model=schemas.TokenOut, summary="Log in (OAuth2 password flow)")
 def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), s: Session = Depends(db)):
-    user = s.scalars(select(AppUser).where(AppUser.username == form.username.strip().lower())).first()
-    ok = verify_password(form.password, user.password_hash if user else None)
+    username = form.username.strip().lower()[:64]
     client = request.client.host if request.client else None
+    wait = throttle.retry_after(username)
+    if wait is not None:
+        audit.record(s, username, "auth.login_locked", "user", username, client=client)
+        s.commit()
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many failed sign-ins for this account; try again later",
+            headers={"Retry-After": str(wait)},
+        )
+    user = s.scalars(select(AppUser).where(AppUser.username == username)).first()
+    ok = verify_password(form.password, user.password_hash if user else None)
     if not ok or user is None or not user.is_active:
+        throttle.failed(username)
         # Committed even though the request fails: failed logins belong in the audit trail.
-        audit.record(s, form.username[:64], "auth.login_failed", "user", form.username[:64], client=client)
+        audit.record(s, username, "auth.login_failed", "user", username, client=client)
         s.commit()
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    throttle.succeeded(username)
     token, ttl = create_token(user.username, user.role)
     audit.record(s, user.username, "auth.login", "user", user.username, client=client)
     return schemas.TokenOut(access_token=token, expires_in=ttl, user=schemas.UserOut.model_validate(user))

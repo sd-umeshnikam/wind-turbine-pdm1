@@ -1,5 +1,7 @@
 # Wind Turbine Predictive Maintenance Platform — Architecture Blueprint
 
+> **Superseded (v1).** This describes the retired v1 architecture. The current platform is described in [ADR-0005](/docs/adr/0005-platform-v2.md) and the [README](/README.md).
+
 **Status:** Draft v1 — architecture blueprint + repo scaffold (not yet deployed)
 **Cloud:** AWS
 **Compute/analytics:** Databricks on AWS (medallion architecture, Unity Catalog)

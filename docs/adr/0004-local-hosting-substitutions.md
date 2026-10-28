@@ -1,7 +1,7 @@
 # ADR-0004: Local (Linux) Hosting Substitutions
 
 ## Status
-Accepted
+Superseded by [ADR-0005](0005-platform-v2.md)
 
 ## Context
 The platform needed to run entirely on a single local Linux box, including the data

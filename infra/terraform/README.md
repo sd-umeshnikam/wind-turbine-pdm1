@@ -1,5 +1,7 @@
 # Terraform — Wind Turbine PdM Platform
 
+> **Superseded (v1).** This describes the retired v1 architecture. The current platform is described in [ADR-0005](/docs/adr/0005-platform-v2.md) and the [README](/README.md).
+
 Implements the architecture in [`docs/architecture/BLUEPRINT.md`](../../docs/architecture/BLUEPRINT.md) and
 [ADR-0001](../../docs/adr/0001-cloud-and-iac-choice.md). See
 [`docs/manual-setup/RUNBOOK.md`](../../docs/manual-setup/RUNBOOK.md) for the manual-console alternative and

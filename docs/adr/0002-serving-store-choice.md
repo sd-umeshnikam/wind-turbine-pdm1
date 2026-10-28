@@ -1,7 +1,7 @@
 # ADR-0002: Serving-Layer Data Stores and Model-Serving Platform
 
 ## Status
-Accepted
+Superseded by [ADR-0005](0005-platform-v2.md)
 
 ## Context
 The Gold Delta layer is the analytical source of truth, but it is not built for the dashboard's read pattern (low-latency "latest value + recent window per turbine", plus alert/config lookups, plus relational maintenance records). A serving layer is needed between Gold and the API services, and model inference needs a hosting decision.
