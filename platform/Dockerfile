@@ -23,4 +23,6 @@ RUN useradd --create-home --uid 10001 app \
 USER app
 
 EXPOSE 8000
-CMD ["uvicorn", "wtpdm.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# uvicorn's access log prints query strings (the stream token); the app logs each request
+# itself, path only.
+CMD ["uvicorn", "wtpdm.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
