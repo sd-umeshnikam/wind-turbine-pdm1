@@ -202,6 +202,36 @@ test("assistant answers from live data with sources and follow-ups", async ({ pa
   expect(problems).toEqual([]);
 });
 
+test("assistant keeps the conversation when closed and starts a clean new one", async ({ page }) => {
+  test.setTimeout(240_000);
+  const problems = watch(page);
+  await login(page);
+  await page.getByRole("button", { name: "Assistant" }).click();
+  const panel = page.getByRole("complementary", { name: "Maintenance assistant" });
+  const asked = panel.locator(".bubble-user");
+
+  // Closed while answering: the question and its answer are there on reopening.
+  await panel.getByLabel("Question").fill("How many open alerts are there?");
+  await panel.getByLabel("Question").press("Enter");
+  await expect(panel.locator(".turbine-loader")).toBeVisible();
+  await panel.getByRole("button", { name: "Close assistant" }).click();
+  await page.getByRole("button", { name: "Assistant" }).click();
+  await expect(asked).toHaveText(["How many open alerts are there?"]);
+  await expect(panel.locator(".markdown").first()).toBeVisible({ timeout: 90_000 });
+
+  // New conversation while answering: the next question is sent, the old answer is dropped.
+  await panel.getByLabel("Question").fill("What is the health of turbine A-0?");
+  await panel.getByLabel("Question").press("Enter");
+  await panel.getByRole("button", { name: "New conversation" }).click();
+  await panel.getByLabel("Question").fill("Is there any drift?");
+  await panel.getByLabel("Question").press("Enter");
+  await expect(asked).toHaveText(["Is there any drift?"]);
+  await expect(panel.locator(".markdown").first()).toBeVisible({ timeout: 90_000 });
+  await page.waitForTimeout(15_000);
+  await expect(asked).toHaveText(["Is there any drift?"]);
+  expect(problems).toEqual([]);
+});
+
 test("alert drawer and turbine page show maintenance recommendations", async ({ page }) => {
   const problems = watch(page);
   await login(page);

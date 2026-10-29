@@ -1,8 +1,10 @@
 // Maintenance assistant panel: a tool-calling LLM over the live platform data. Answers carry
 // their sources (links into the console), unverified figures are marked, and every answer
 // offers follow-up questions. The page on screen (turbine, alert) is sent as context.
+// The conversation lives in the provider, so closing the panel keeps it and an answer that
+// arrives while the panel is closed is still shown on reopening.
 
-import { Bot, MessageSquarePlus, Send, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert, X } from "lucide-react";
+import { MessageSquarePlus, Send, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert, X } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -18,6 +20,7 @@ import { ApiError } from "../api/client";
 import { useAssistantStatus, useChat, useFeedback, useStarters } from "../api/hooks";
 import type { ChatContext, ChatResponse } from "../api/types";
 import { Markdown } from "../components/Markdown";
+import { TurbineLoader } from "../components/TurbineLoader";
 import { InsightsList } from "./Insights";
 
 interface Turn {
@@ -49,9 +52,65 @@ export function usePageContext(): ChatContext {
   }, [pathname, params]);
 }
 
+function errorText(err: unknown): string {
+  if (err instanceof ApiError && err.status === 429) return "Too many questions in a short time. Please wait a minute.";
+  return `The assistant could not answer: ${err instanceof Error ? err.message : String(err)}`;
+}
+
+/** One conversation: its turns, the server conversation id and the unsent draft. */
+function useConversation() {
+  const chat = useChat();
+  const feedback = useFeedback();
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [conversation, setConversation] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  // Bumped by "New conversation": answers to questions from an earlier session are dropped.
+  const session = useRef(0);
+  const busy = turns.some((t) => !t.response && !t.error);
+  const update = (id: string, patch: Partial<Turn>) => setTurns((t) => t.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  const send = (question: string, context: ChatContext): boolean => {
+    const q = question.trim();
+    if (!q || busy) return false;
+    const id = `${Date.now()}`;
+    const epoch = session.current;
+    setTurns((t) => [...t, { id, question: q }]);
+    setDraft("");
+    chat.mutateAsync({ message: q, conversation_id: conversation, context }).then(
+      (response) => {
+        if (epoch !== session.current) return;
+        setConversation(response.conversation_id);
+        update(id, { response });
+      },
+      (err: unknown) => {
+        if (epoch === session.current) update(id, { error: errorText(err) });
+      },
+    );
+    return true;
+  };
+
+  const reset = () => {
+    session.current += 1;
+    setTurns([]);
+    setConversation(null);
+    setDraft("");
+  };
+
+  const rate = (turn: Turn, rating: 1 | -1) => {
+    if (!turn.response?.message_id) return;
+    feedback.mutate({ id: turn.response.message_id, rating });
+    update(turn.id, { rated: rating });
+  };
+
+  return { turns, busy, draft, setDraft, send, reset, rate };
+}
+
+type Conversation = ReturnType<typeof useConversation>;
+
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  const conversation = useConversation();
   const ask = useCallback((q: string) => {
     setOpen(true);
     setPending(q);
@@ -59,7 +118,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   return (
     <AssistantContext.Provider value={{ open, setOpen, ask }}>
       {children}
-      {open && <AssistantPanel onClose={() => setOpen(false)} pending={pending} clearPending={() => setPending(null)} />}
+      {open && (
+        <AssistantPanel
+          onClose={() => setOpen(false)}
+          conversation={conversation}
+          pending={pending}
+          clearPending={() => setPending(null)}
+        />
+      )}
     </AssistantContext.Provider>
   );
 }
@@ -81,12 +147,7 @@ function Answer({ turn, onAsk, onRate }: { turn: Turn; onAsk: (q: string) => voi
         {turn.error}
       </div>
     );
-  if (!r)
-    return (
-      <div className="row subtle" role="status">
-        <Bot size={14} /> Looking at the live data…
-      </div>
-    );
+  if (!r) return <TurbineLoader label="Looking at the live data…" />;
   const unverified = r.flags.includes("ungrounded_figures");
   return (
     <div className="stack" style={{ gap: 8 }}>
@@ -140,65 +201,30 @@ function Answer({ turn, onAsk, onRate }: { turn: Turn; onAsk: (q: string) => voi
   );
 }
 
-function AssistantPanel({ onClose, pending, clearPending }: { onClose: () => void; pending: string | null; clearPending: () => void }) {
+function AssistantPanel({
+  onClose,
+  conversation,
+  pending,
+  clearPending,
+}: {
+  onClose: () => void;
+  conversation: Conversation;
+  pending: string | null;
+  clearPending: () => void;
+}) {
   const context = usePageContext();
   const status = useAssistantStatus();
   const starters = useStarters(context);
-  const chat = useChat();
-  const feedback = useFeedback();
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [conversation, setConversation] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const { turns, busy, draft, setDraft, reset, rate } = conversation;
+  const send = (question: string) => conversation.send(question, context);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns]);
 
-  const send = useCallback(
-    (question: string) => {
-      const q = question.trim();
-      if (!q || chat.isPending) return;
-      const id = `${Date.now()}`;
-      setTurns((t) => [...t, { id, question: q }]);
-      setDraft("");
-      chat.mutate(
-        { message: q, conversation_id: conversation, context },
-        {
-          onSuccess: (response) => {
-            setConversation(response.conversation_id);
-            setTurns((t) => t.map((x) => (x.id === id ? { ...x, response } : x)));
-          },
-          onError: (err) =>
-            setTurns((t) =>
-              t.map((x) =>
-                x.id === id
-                  ? {
-                      ...x,
-                      error:
-                        err instanceof ApiError && err.status === 429
-                          ? "Too many questions in a short time. Please wait a minute."
-                          : `The assistant could not answer: ${err.message}`,
-                    }
-                  : x,
-              ),
-            ),
-        },
-      );
-    },
-    [chat, conversation, context],
-  );
-
+  // A question asked from elsewhere in the console; held until the current answer arrives.
   useEffect(() => {
-    if (pending) {
-      send(pending);
-      clearPending();
-    }
-  }, [pending, send, clearPending]);
-
-  const rate = (turn: Turn, rating: 1 | -1) => {
-    if (!turn.response?.message_id) return;
-    feedback.mutate({ id: turn.response.message_id, rating });
-    setTurns((t) => t.map((x) => (x.id === turn.id ? { ...x, rated: rating } : x)));
-  };
+    if (pending && conversation.send(pending, context)) clearPending();
+  }, [pending, conversation, context, clearPending]);
 
   const scope = context.alert_id ? "the open alert" : context.turbine_id ? `turbine ${context.turbine_id}` : null;
 
@@ -214,10 +240,7 @@ function AssistantPanel({ onClose, pending, clearPending }: { onClose: () => voi
         </div>
         <button
           className="btn ghost icon"
-          onClick={() => {
-            setTurns([]);
-            setConversation(null);
-          }}
+          onClick={reset}
           title="New conversation"
           aria-label="New conversation"
         >
@@ -281,7 +304,7 @@ function AssistantPanel({ onClose, pending, clearPending }: { onClose: () => voi
           }}
           aria-label="Question"
         />
-        <button className="btn primary icon" type="submit" disabled={!draft.trim() || chat.isPending} aria-label="Send">
+        <button className="btn primary icon" type="submit" disabled={!draft.trim() || busy} aria-label="Send">
           <Send size={15} />
         </button>
       </form>

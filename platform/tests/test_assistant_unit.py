@@ -155,3 +155,36 @@ def test_daily_quota_fails_fast_with_a_clear_message(monkeypatch):
         llm.OpenAICompatible("k", "http://x", "m").complete([{"role": "user", "content": "hi"}])
     assert len(calls) == 1  # no pointless retries against a daily quota
     assert 600 < exc.value.retry_after < 620 and "about 10 min" in str(exc.value)
+
+
+def test_malformed_tool_call_is_retried(monkeypatch):
+    import httpx
+
+    from wtpdm.assistant import llm
+
+    req = httpx.Request("POST", "http://x")
+    replies = [
+        httpx.Response(400, json={"error": {"code": "tool_use_failed"}}, request=req),
+        httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]}, request=req),
+    ]
+    monkeypatch.setattr(llm.httpx, "post", lambda *a, **k: replies.pop(0))
+    reply = llm.OpenAICompatible("k", "http://x", "m").complete([{"role": "user", "content": "hi"}])
+    assert reply.content == "ok" and not replies
+
+
+def test_other_client_errors_are_not_retried_and_name_the_code(monkeypatch):
+    import httpx
+
+    from wtpdm.assistant import llm
+
+    calls = []
+
+    def post(*args, **kwargs):
+        calls.append(1)
+        body = {"error": {"code": "model_not_found", "message": "no such model"}}
+        return httpx.Response(404, json=body, request=httpx.Request("POST", "http://x"))
+
+    monkeypatch.setattr(llm.httpx, "post", post)
+    with pytest.raises(llm.LLMError, match=r"404 \(model_not_found\)"):
+        llm.OpenAICompatible("k", "http://x", "m").complete([{"role": "user", "content": "hi"}])
+    assert len(calls) == 1

@@ -10,11 +10,16 @@ from typing import Any, Protocol
 
 import httpx
 
+from wtpdm.logging import get_logger
 from wtpdm.settings import get_settings
 
 MAX_RETRY_WAIT_SECONDS = 30.0
 TIMEOUT_SECONDS = 60.0
 ATTEMPTS = 4
+# Provider 400s caused by the model itself (a malformed tool call); a new sample usually works.
+RETRYABLE_CODES = {"tool_use_failed", "output_parse_failed"}
+
+log = get_logger("llm")
 
 
 def _retry_after(resp: httpx.Response, attempt: int) -> float:
@@ -37,6 +42,14 @@ class LLMRateLimited(LLMError):
         minutes = round(self.retry_after / 60)
         when = f"about {minutes} min" if minutes >= 1 else f"{round(self.retry_after)} s"
         super().__init__(f"The language model's usage limit is reached; try again in {when}")
+
+
+def _error_code(resp: httpx.Response) -> str:
+    """The provider's error code (e.g. `tool_use_failed`), or "" when it gives none."""
+    try:
+        return str(resp.json()["error"].get("code") or "")
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return ""
 
 
 _TRY_AGAIN = re.compile(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?")
@@ -146,13 +159,18 @@ class OpenAICompatible:
                     raise LLMRateLimited(wait)
                 time.sleep(_retry_after(resp, attempt))
                 continue
+            if resp.status_code == 400 and not last and _error_code(resp) in RETRYABLE_CODES:
+                log.warning("llm retry", model=self.name, code=_error_code(resp), attempt=attempt + 1)
+                continue
             if resp.status_code >= 500 and not last:
                 time.sleep(_retry_after(resp, attempt))
                 continue
             break
         if resp is None or resp.status_code >= 400:
             status = resp.status_code if resp is not None else "no response"
-            raise LLMError(f"LLM provider returned {status}")
+            code = _error_code(resp) if resp is not None else ""
+            log.warning("llm error", model=self.name, status=status, code=code)
+            raise LLMError(f"LLM provider returned {status}" + (f" ({code})" if code else ""))
         choice = resp.json()["choices"][0]["message"]
         calls = [
             ToolCall(c["id"], c["function"]["name"], c["function"].get("arguments") or "{}")

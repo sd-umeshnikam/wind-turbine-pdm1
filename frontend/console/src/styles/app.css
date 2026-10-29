@@ -1014,6 +1014,34 @@ table.data tr.highlight td {
   }
 }
 
+/* Busy indicator: a turbine with a turning rotor. */
+.turbine-loader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-2);
+}
+.turbine-loader svg {
+  flex: none;
+}
+.turbine-tower {
+  fill: var(--ink-3);
+}
+.turbine-rotor {
+  fill: var(--accent);
+  transform-box: view-box;
+  transform-origin: 32px 22px;
+  animation: twin-spin 1.6s linear infinite;
+}
+.turbine-hub {
+  fill: var(--accent-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .turbine-rotor {
+    animation: none;
+  }
+}
+
 /* ---------------------------------------------------------------- assistant */
 
 .assistant {
