@@ -224,7 +224,9 @@ function AssistantPanel({
   const send = (question: string) => conversation.send(question, context);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns]);
 
   // A question asked from elsewhere in the console; held until the current answer arrives.
   useEffect(() => {
