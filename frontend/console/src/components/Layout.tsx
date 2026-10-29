@@ -12,10 +12,11 @@ import {
   TrendingUp,
   Wind,
 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAlertSummary, useReplay } from "../api/hooks";
 import { useStreamState } from "../api/stream";
 import { useAuth } from "../auth/AuthContext";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { ago } from "../lib/format";
 import { useThemeChoice, type ThemeChoice } from "../lib/theme";
 import { AssistantLauncher, AssistantProvider } from "../assistant/Assistant";
@@ -114,6 +115,7 @@ function ThemeToggle() {
 
 export function Layout() {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
   return (
     <AssistantProvider>
     <div className="shell">
@@ -136,7 +138,9 @@ export function Layout() {
         )}
       </header>
       <main className="main">
-        <Outlet />
+        <ErrorBoundary key={pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
     </AssistantProvider>

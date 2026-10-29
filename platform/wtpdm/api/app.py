@@ -14,16 +14,17 @@ from contextlib import asynccontextmanager
 
 import mlflow
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from mlflow.exceptions import MlflowException
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
 from wtpdm import __version__, catalog
 from wtpdm.api import models_service
 from wtpdm.api.routers import alerts, assistant, auth, data, fleet, mlops, stream, turbines
-from wtpdm.api.security import hash_password, jwt_secret
+from wtpdm.api.security import Principal, hash_password, jwt_secret, viewer
 from wtpdm.db.models import AppUser, AuditLog, Role
 from wtpdm.db.session import get_engine, session_scope
 from wtpdm.logging import configure_logging, get_logger
@@ -149,3 +150,24 @@ def ready() -> dict:
     with get_engine().connect() as conn:
         conn.execute(text("SELECT 1"))
     return {"status": "ready"}
+
+
+class ClientError(BaseModel):
+    message: str = Field(max_length=500)
+    stack: str = Field("", max_length=4000)
+    path: str = Field("", max_length=300)
+    user_agent: str = Field("", max_length=300)
+
+
+@app.post("/api/client-errors", status_code=status.HTTP_204_NO_CONTENT, tags=["ops"])
+def client_error(body: ClientError, user: Principal = Depends(viewer)) -> Response:
+    """A crash in the console, reported by the browser so it shows up in the api logs."""
+    log.warning(
+        "console error",
+        user=user.username,
+        message=body.message,
+        stack=body.stack,
+        path=body.path,
+        user_agent=body.user_agent,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

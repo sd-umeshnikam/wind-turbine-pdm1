@@ -80,6 +80,14 @@ def test_liveness_needs_no_token_but_data_does(client):
     assert client.get("/api/fleet", headers={"Authorization": "Bearer nonsense"}).status_code == 401
 
 
+def test_console_errors_are_accepted_from_signed_in_users_only(client):
+    body = {"message": "TypeError: x is undefined", "stack": "at Panel", "path": "/"}
+    assert client.post("/api/client-errors", json=body).status_code == 401
+    assert client.post("/api/client-errors", json=body, headers=VIEWER).status_code == 204
+    too_long = {**body, "message": "x" * 501}
+    assert client.post("/api/client-errors", json=too_long, headers=VIEWER).status_code == 422
+
+
 def test_login_issues_a_token_and_audits_failures(client, session):
     bad = client.post("/api/auth/token", data={"username": "pytest-viewer", "password": "wrong"})
     assert bad.status_code == 401

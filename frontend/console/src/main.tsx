@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ApiError } from "./api/client";
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { ErrorBoundary, reportUncaughtErrors } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toasts";
 import "./styles/app.css";
 
@@ -19,13 +20,17 @@ const queryClient = new QueryClient({
   },
 });
 
+reportUncaughtErrors();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ToastProvider>
           <AuthProvider>
-            <App />
+            <ErrorBoundary area="the console">
+              <App />
+            </ErrorBoundary>
           </AuthProvider>
         </ToastProvider>
       </BrowserRouter>

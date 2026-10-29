@@ -19,6 +19,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useAssistantStatus, useChat, useFeedback, useStarters } from "../api/hooks";
 import type { ChatContext, ChatResponse } from "../api/types";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { Markdown } from "../components/Markdown";
 import { TurbineLoader } from "../components/TurbineLoader";
 import { InsightsList } from "./Insights";
@@ -119,12 +120,16 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     <AssistantContext.Provider value={{ open, setOpen, ask }}>
       {children}
       {open && (
-        <AssistantPanel
-          onClose={() => setOpen(false)}
-          conversation={conversation}
-          pending={pending}
-          clearPending={() => setPending(null)}
-        />
+        <aside className="assistant" role="complementary" aria-label="Maintenance assistant">
+          <ErrorBoundary area="the assistant">
+            <AssistantPanel
+              onClose={() => setOpen(false)}
+              conversation={conversation}
+              pending={pending}
+              clearPending={() => setPending(null)}
+            />
+          </ErrorBoundary>
+        </aside>
       )}
     </AssistantContext.Provider>
   );
@@ -229,7 +234,7 @@ function AssistantPanel({
   const scope = context.alert_id ? "the open alert" : context.turbine_id ? `turbine ${context.turbine_id}` : null;
 
   return (
-    <aside className="assistant" role="complementary" aria-label="Maintenance assistant">
+    <>
       <header className="assistant-head">
         <Sparkles size={16} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -311,6 +316,6 @@ function AssistantPanel({
       <div className="subtle" style={{ padding: "0 16px 10px" }}>
         Advisory only. Verify before acting; site safety procedures take precedence.
       </div>
-    </aside>
+    </>
   );
 }
